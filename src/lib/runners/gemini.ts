@@ -1,5 +1,5 @@
 import { spawn } from "child_process";
-import { AgentRunner, AgentRunnerOptions, AgentRunnerProgress } from "../types";
+import { AgentRunner, AgentRunnerOptions, AgentRunnerProgress } from "../types.js";
 
 export class GeminiAgentRunner implements AgentRunner {
   async *run(options: AgentRunnerOptions): AsyncIterable<AgentRunnerProgress> {

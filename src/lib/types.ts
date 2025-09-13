@@ -19,7 +19,7 @@ export const MatrixEntrySchema = z.object({
     .union([SupportedAgentSchema, z.array(SupportedAgentSchema)])
     .optional(),
   rulesFile: z.union([z.string(), z.array(z.string())]).optional(),
-  mcpServers: McpServersConfigSchema.optional(),
+  mcpServers: z.union([McpServersConfigSchema, z.array(z.union([McpServersConfigSchema, z.null()]))]).optional(),
 });
 export type MatrixEntry = z.infer<typeof MatrixEntrySchema>;
 
