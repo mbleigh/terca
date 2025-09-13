@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { expandMatrix, MatrixEntry } from './config';
+import { expandMatrix } from './config';
+import { MatrixEntry } from './types';
 
 describe('expandMatrix', () => {
   it('should return an array with an empty object for an empty matrix', () => {
