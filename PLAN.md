@@ -49,11 +49,11 @@ This plan outlines the development of the Terca CLI. Use the checklists below to
 
 ## Milestone 6: Polished CLI User Interface
 
-- [ ] Enhance `src/cli/index.ts` to drive the test execution and display.
-- [ ] Print status updates for each running test.
-- [ ] Display a live-updating window of the last ~10 lines of agent output.
-- [ ] After all tests complete, read `results.json` and display a formatted summary table.
-- [ ] Use `chalk` to color-code the results table based on scores.
+- [x] Enhance `src/cli/index.ts` to drive the test execution and display.
+- [x] Print status updates for each running test.
+- [x] Display a live-updating window of the last ~10 lines of agent output.
+- [x] After all tests complete, read `results.json` and display a formatted summary table.
+- [x] Use `chalk` to color-code the results table based on scores.
 
 ## Milestone 7: Advanced Features & Finalization
 
