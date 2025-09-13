@@ -10,19 +10,29 @@ import path from "path";
 export class GeminiAgentRunner implements AgentRunner {
   async *run(options: AgentRunnerOptions): AsyncIterable<AgentRunnerProgress> {
     const args = ["-p", options.prompt, "--yolo"];
-    const mcpConfigFile = path.join(options.workspaceDir, ".terca-mcp.json");
+    const geminiDir = path.join(options.workspaceDir, ".gemini");
+    const settingsFile = path.join(geminiDir, "settings.json");
 
     try {
+      await fs.mkdir(geminiDir, { recursive: true });
+
+      const settings: any = {};
+
       if (options.rulesFile) {
-        args.push("--rules", options.rulesFile);
+        const rulesDest = path.join(
+          options.workspaceDir,
+          path.basename(options.rulesFile),
+        );
+        await fs.copyFile(options.rulesFile, rulesDest);
+        settings.context = { fileName: path.basename(options.rulesFile) };
       }
 
       if (options.mcpServers) {
-        await fs.writeFile(
-          mcpConfigFile,
-          JSON.stringify(options.mcpServers, null, 2),
-        );
-        args.push("--mcp-config", mcpConfigFile);
+        settings.mcpServers = options.mcpServers;
+      }
+
+      if (Object.keys(settings).length > 0) {
+        await fs.writeFile(settingsFile, JSON.stringify(settings, null, 2));
       }
 
       const child = spawn("gemini", args, {
@@ -50,9 +60,7 @@ export class GeminiAgentRunner implements AgentRunner {
 
       yield { done: true, exitCode };
     } finally {
-      if (options.mcpServers) {
-        await fs.rm(mcpConfigFile, { force: true });
-      }
+      await fs.rm(geminiDir, { recursive: true, force: true });
     }
   }
 }
