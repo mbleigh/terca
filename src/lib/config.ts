@@ -17,7 +17,7 @@ export function expandMatrix(matrix: MatrixEntry[]): Record<string, any>[] {
 
   for (const entry of matrix) {
     const newResults: Record<string, any>[] = [];
-    const keys = Object.keys(entry) as (keyof MatrixEntry)[];
+    const keys = (Object.keys(entry) as (keyof MatrixEntry)[]).sort();
 
     // Get all possible values for each key in the current entry
     const valueSets: Record<string, any[]> = {};
@@ -45,7 +45,7 @@ export function expandMatrix(matrix: MatrixEntry[]): Record<string, any>[] {
 }
 
 function cartesianProduct(sets: Record<string, any[]>) {
-  const keys = Object.keys(sets);
+  const keys = Object.keys(sets).sort();
   if (keys.length === 0) {
     return [{}];
   }
