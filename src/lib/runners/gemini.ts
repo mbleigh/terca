@@ -10,43 +10,49 @@ import path from "path";
 export class GeminiAgentRunner implements AgentRunner {
   async *run(options: AgentRunnerOptions): AsyncIterable<AgentRunnerProgress> {
     const args = ["-p", options.prompt, "--yolo"];
+    const mcpConfigFile = path.join(options.workspaceDir, ".terca-mcp.json");
 
-    if (options.rulesFile) {
-      args.push("--rules", options.rulesFile);
-    }
+    try {
+      if (options.rulesFile) {
+        args.push("--rules", options.rulesFile);
+      }
 
-    if (options.mcpServers) {
-      const mcpConfigFile = path.join(options.workspaceDir, ".terca-mcp.json");
-      await fs.writeFile(
-        mcpConfigFile,
-        JSON.stringify(options.mcpServers, null, 2),
-      );
-      args.push("--mcp-config", mcpConfigFile);
-    }
+      if (options.mcpServers) {
+        await fs.writeFile(
+          mcpConfigFile,
+          JSON.stringify(options.mcpServers, null, 2),
+        );
+        args.push("--mcp-config", mcpConfigFile);
+      }
 
-    const child = spawn("gemini", args, {
-      cwd: options.workspaceDir,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+      const child = spawn("gemini", args, {
+        cwd: options.workspaceDir,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
 
-    // Stream stdout
-    if (child.stdout) {
-      for await (const chunk of child.stdout) {
-        yield { output: chunk.toString() };
+      // Stream stdout
+      if (child.stdout) {
+        for await (const chunk of child.stdout) {
+          yield { output: chunk.toString() };
+        }
+      }
+
+      // Stream stderr
+      if (child.stderr) {
+        for await (const chunk of child.stderr) {
+          yield { output: chunk.toString() };
+        }
+      }
+
+      const exitCode = await new Promise<number>((resolve) => {
+        child.on("close", resolve);
+      });
+
+      yield { done: true, exitCode };
+    } finally {
+      if (options.mcpServers) {
+        await fs.rm(mcpConfigFile, { force: true });
       }
     }
-
-    // Stream stderr
-    if (child.stderr) {
-      for await (const chunk of child.stderr) {
-        yield { output: chunk.toString() };
-      }
-    }
-
-    const exitCode = await new Promise<number>((resolve) => {
-      child.on("close", resolve);
-    });
-
-    yield { done: true, exitCode };
   }
 }
