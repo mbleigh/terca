@@ -44,10 +44,34 @@ After completing the task, you must:
 > 
 > (Then show the `replace` tool call).
 
-### 5. Await Approval for Plan Update
+### 5. Await Approval and Update Plan
 
-Do not modify `PLAN.md` until the user approves the `replace` operation.
+Do not modify `PLAN.md` until the user approves the `replace` operation. Once approved, the tool will run and the plan will be updated.
 
-### 6. Repeat
+### 6. Commit Your Work
 
-Once `PLAN.md` is updated, return to Step 1 and identify the next unchecked task. Continue this cycle until all tasks in all milestones are complete.
+Immediately after `PLAN.md` has been successfully updated, you must commit the changes. A clean git history is important.
+
+1.  Stage all changes using `git add .`.
+2.  Create a commit with a descriptive message that reflects the completed task. Use the [Conventional Commits](https://www.conventionalcommits.org/) format.
+
+**Example:**
+> "Now I will commit the changes."
+> 
+> (Then show the `run_shell_command` tool call for `git add .` and `git commit -m "feat(setup): Create initial directory structure"`).
+
+### 7. Repeat
+
+Once the commit is successful, return to Step 1 and identify the next unchecked task. Continue this cycle until all tasks are complete.
+
+## Lessons Learned & Conventions
+
+- **Tests:** Use table-style tests with the format `{desc, input, expect}[]`.
+- **ESM Imports:** Always use `.js` extensions for relative imports.
+- **Compiler Errors:** Always check for TypeScript compiler errors with `npm run build` before committing.
+- **Commits:** Commit progress after each milestone and check in for feedback.
+- **Zod:** Use Zod for parsing and validating configuration.
+- **Types:** Consolidate all types and interfaces into `src/lib/types.ts`.
+- **Matrix Expansion:**
+    -   Entries in the `matrix` array are combined using a Cartesian product.
+    -   Keys within a single `matrix` entry are correlated (zipped).

@@ -4,31 +4,31 @@ This plan outlines the development of the Terca CLI. Use the checklists below to
 
 ## Milestone 1: Project Setup and Core Interfaces
 
-- [ ] Create directory structure: `src/cli` and `src/lib`.
-- [ ] Install core dependencies: `typescript`, `ts-node`, `@types/node`, `yaml`, `chalk`.
-- [ ] Install testing dependencies: `vitest`.
-- [ ] Create `tsconfig.json`.
-- [ ] Create `vitest.config.ts`.
-- [ ] Add scripts to `package.json` for `build`, `start`, and `test`.
-- [ ] Define all required interfaces from `SPEC.md` in `src/lib/interfaces.ts`.
-- [ ] Create a basic CLI entry point at `src/cli/index.ts`.
+- [x] Create directory structure: `src/cli` and `src/lib`.
+- [x] Install core dependencies: `typescript`, `tsx`, `@types/node`, `yaml`.
+- [x] Install testing dependencies: `vitest`.
+- [x] Create `tsconfig.json`.
+- [x] Create `vitest.config.ts`.
+- [x] Add scripts to `package.json` for `build`, `start`, and `test`.
+- [x] Define all required interfaces from `SPEC.md` in `src/lib/types.ts`.
+- [x] Create a basic CLI entry point at `src/cli/index.ts`.
 
 ## Milestone 2: Configuration Loading and Matrix Expansion
 
-- [ ] Create `src/lib/config.ts`.
-- [ ] Implement `loadConfig` function to read and parse `terca.yaml`.
-- [ ] Implement `expandMatrix` function to generate the Cartesian product of all matrix combinations.
-- [ ] Write unit tests for `expandMatrix` in `src/lib/config.test.ts` using `vitest`.
-- [ ] Use table-style tests as requested in the spec to cover various matrix scenarios.
+- [x] Create `src/lib/config.ts`.
+- [x] Implement `loadConfig` function to read and parse `terca.yaml`.
+- [x] Implement `expandMatrix` function to generate the Cartesian product of all matrix combinations.
+- [x] Write unit tests for `expandMatrix` in `src/lib/config.test.ts` using `vitest`.
+- [x] Use table-style tests as requested in the spec to cover various matrix scenarios.
 
 ## Milestone 3: Gemini Agent Runner
 
-- [ ] Create `src/lib/runners/gemini.ts`.
-- [ ] Implement the `AgentRunner` interface for the Gemini CLI.
-- [ ] Use `child_process.spawn` to execute the `gemini` command.
-- [ ] Implement the `run` method to return an `AsyncIterable<AgentRunnerProgress>`.
-- [ ] Ensure the runner correctly streams `stdout` and `stderr`.
-- [ ] Ensure the runner reports the final `exitCode`.
+- [x] Create `src/lib/runners/gemini.ts`.
+- [x] Implement the `AgentRunner` interface for the Gemini CLI.
+- [x] Use `child_process.spawn` to execute the `gemini` command.
+- [x] Implement the `run` method to return an `AsyncIterable<AgentRunnerProgress>`.
+- [x] Ensure the runner correctly streams `stdout` and `stderr`.
+- [x] Ensure the runner reports the final `exitCode`.
 
 ## Milestone 4: Core Test Execution Orchestration
 
