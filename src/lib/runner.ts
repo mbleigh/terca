@@ -89,14 +89,14 @@ async function createRunDir(): Promise<string> {
     .padStart(2, "0")}-${date.getDate().toString().padStart(2, "0")}`;
   let i = 1;
   let runDir: string;
+
+  const baseDir = path.join(".terca", "runs");
+  await fs.mkdir(baseDir, { recursive: true }); // Ensure base directory exists
+
   while (true) {
-    runDir = path.join(
-      ".terca",
-      "runs",
-      `${dateStr}-${i.toString().padStart(3, "0")}`,
-    );
+    runDir = path.join(baseDir, `${dateStr}-${i.toString().padStart(3, "0")}`);
     try {
-      await fs.mkdir(runDir, { recursive: true });
+      await fs.mkdir(runDir); // Don't use recursive here
       return runDir;
     } catch (e: any) {
       if (e.code === "EEXIST") {
