@@ -60,5 +60,5 @@ This plan outlines the development of the Terca CLI. Use the checklists below to
 - [x] Implement the `copy` `before` action.
 - [x] Implement the `files` `before` action.
 - [x] Update the Gemini runner to handle `rulesFile` and `mcpServers` by creating temporary config files.
-- [ ] Add stubs for other agent runners to demonstrate extensibility.
+- [x] Add stubs for other agent runners to demonstrate extensibility.
 - [ ] Perform a final code review for error handling and edge cases.

@@ -1,5 +1,8 @@
 import { expandMatrix, loadConfig } from "./config";
-import { GeminiAgentRunner } from "./runners/gemini.ts";
+import { GeminiAgentRunner } from "./runners/gemini.js";
+import { ClaudeAgentRunner } from "./runners/claude.js";
+import { CodexAgentRunner } from "./runners/codex.js";
+import { OpencodeAgentRunner } from "./runners/opencode.js";
 import { AgentRunner, Config, ExpandedMatrix, TercaTest } from "./types";
 import path from "path";
 import fs from "fs/promises";
@@ -16,6 +19,9 @@ import {
 
 const AGENT_RUNNERS: Record<string, new () => AgentRunner> = {
   gemini: GeminiAgentRunner,
+  claude: ClaudeAgentRunner,
+  codex: CodexAgentRunner,
+  opencode: OpencodeAgentRunner,
 };
 
 export async function runTests() {
@@ -62,7 +68,7 @@ async function runTest(
   runDir: string,
   config: Config,
   test: TercaTest,
-  matrix: ExpandedMatrix
+  matrix: ExpandedMatrix,
 ) {
   const testRunDir = await setupTestRunDir(runDir, test, matrix);
   await setupWorkspace(testRunDir, config);
@@ -82,7 +88,7 @@ async function createRunDir(): Promise<string> {
     runDir = path.join(
       ".terca",
       "runs",
-      `${dateStr}-${i.toString().padStart(3, "0")}`
+      `${dateStr}-${i.toString().padStart(3, "0")}`,
     );
     try {
       await fs.mkdir(runDir, { recursive: true });
@@ -100,7 +106,7 @@ async function createRunDir(): Promise<string> {
 async function setupTestRunDir(
   runDir: string,
   test: TercaTest,
-  matrix: ExpandedMatrix
+  matrix: ExpandedMatrix,
 ): Promise<string> {
   const matrixId = Object.entries(matrix)
     .map(([k, v]) => {
@@ -126,7 +132,7 @@ async function setupWorkspace(testRunDir: string, config: Config) {
 async function runBeforeActions(
   testRunDir: string,
   config: Config,
-  test: TercaTest
+  test: TercaTest,
 ) {
   const actions = [...(config.before || []), ...(test.before || [])];
   for (const action of actions) {
@@ -156,7 +162,7 @@ async function runBeforeActions(
 async function runAgent(
   testRunDir: string,
   test: TercaTest,
-  matrix: ExpandedMatrix
+  matrix: ExpandedMatrix,
 ) {
   const agent = matrix.agent as string;
   const Runner = AGENT_RUNNERS[agent];
