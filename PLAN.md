@@ -57,8 +57,8 @@ This plan outlines the development of the Terca CLI. Use the checklists below to
 
 ## Milestone 7: Advanced Features & Finalization
 
-- [ ] Implement the `copy` `before` action.
-- [ ] Implement the `files` `before` action.
+- [x] Implement the `copy` `before` action.
+- [x] Implement the `files` `before` action.
 - [ ] Update the Gemini runner to handle `rulesFile` and `mcpServers` by creating temporary config files.
 - [ ] Add stubs for other agent runners to demonstrate extensibility.
 - [ ] Perform a final code review for error handling and edge cases.
