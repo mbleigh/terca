@@ -1,22 +1,41 @@
 import fs from "fs";
 import yaml from "yaml";
-import { TercaConfigSchema, TercaConfig, MatrixEntry } from "./types.js";
+import { TercaConfigSchema, Config, MatrixEntry } from "./types.js";
 
-export function loadConfig(file: string): TercaConfig {
+export function loadConfig(file: string = "terca.yaml"): Config {
   const content = fs.readFileSync(file, "utf-8");
   const data = yaml.parse(content);
   return TercaConfigSchema.parse(data);
 }
 
 export function expandMatrix(matrix: MatrixEntry[]): Record<string, any>[] {
+  if (!matrix || matrix.length === 0) {
+    return [{}];
+  }
+
   let results: Record<string, any>[] = [{}];
 
   for (const entry of matrix) {
     const newResults: Record<string, any>[] = [];
-    const combinations = expandEntry(entry);
+    const keys = Object.keys(entry) as (keyof MatrixEntry)[];
+
+    // Get all possible values for each key in the current entry
+    const valueSets: Record<string, any[]> = {};
+    for (const key of keys) {
+      const value = entry[key];
+      if (Array.isArray(value)) {
+        valueSets[key] = value;
+      } else {
+        valueSets[key] = [value];
+      }
+    }
+
+    // Generate Cartesian product of the value sets
+    const product = cartesianProduct(valueSets);
+
     for (const result of results) {
-      for (const combination of combinations) {
-        newResults.push({ ...result, ...combination });
+      for (const p of product) {
+        newResults.push({ ...result, ...p });
       }
     }
     results = newResults;
@@ -25,32 +44,28 @@ export function expandMatrix(matrix: MatrixEntry[]): Record<string, any>[] {
   return results;
 }
 
-function expandEntry(entry: MatrixEntry): Record<string, any>[] {
-  const keys = Object.keys(entry).filter(k => isNaN(parseInt(k))) as (keyof MatrixEntry)[];
-  const arrayKeys = keys.filter((key) => Array.isArray(entry[key]));
-
-  if (arrayKeys.length === 0) {
-    return [entry];
+function cartesianProduct(sets: Record<string, any[]>) {
+  const keys = Object.keys(sets);
+  if (keys.length === 0) {
+    return [{}];
   }
 
-  const longestArrayLength = Math.max(
-    ...arrayKeys.map((key) => (entry[key] as any[]).length)
-  );
-
   const results: Record<string, any>[] = [];
-  for (let i = 0; i < longestArrayLength; i++) {
-    const combination: Record<string, any> = {};
-    for (const key of keys) {
-      if (arrayKeys.includes(key)) {
-        const array = entry[key] as any[];
-        if (i < array.length) {
-          combination[key] = array[i];
-        }
-      } else if (entry[key] !== undefined) {
-        combination[key] = entry[key];
+  const firstKey = keys[0];
+  const firstSet = sets[firstKey];
+  const remainingSets = { ...sets };
+  delete remainingSets[firstKey];
+
+  const remainingProduct = cartesianProduct(remainingSets);
+
+  for (const value of firstSet) {
+    for (const p of remainingProduct) {
+      const newProduct = { ...p };
+      if (value !== undefined) {
+        newProduct[firstKey] = value;
       }
+      results.push(newProduct);
     }
-    results.push(combination);
   }
 
   return results;

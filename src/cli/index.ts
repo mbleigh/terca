@@ -1,3 +1,9 @@
 #!/usr/bin/env node
 
-console.log("Hello, Terca!");
+import { runTests } from "../lib/runner";
+
+runTests().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
+

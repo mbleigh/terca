@@ -43,7 +43,7 @@ describe('expandMatrix', () => {
       ],
     },
     {
-      desc: 'should handle a single entry with multiple array-valued keys (zipped)',
+      desc: 'should handle a single entry with multiple array-valued keys',
       input: [
         {
           agent: ['gemini', 'claude'],
@@ -52,11 +52,13 @@ describe('expandMatrix', () => {
       ],
       expect: [
         { agent: 'gemini', rulesFile: 'a.txt' },
+        { agent: 'gemini', rulesFile: 'b.txt' },
+        { agent: 'claude', rulesFile: 'a.txt' },
         { agent: 'claude', rulesFile: 'b.txt' },
       ],
     },
     {
-      desc: 'should handle correlated changes',
+      desc: 'should handle multiple entries with multiple array-valued keys',
       input: [
         { agent: ['gemini', 'claude'] },
         {
@@ -68,10 +70,22 @@ describe('expandMatrix', () => {
         { agent: 'gemini', rulesFile: 'a.txt', mcpServers: null },
         {
           agent: 'gemini',
+          rulesFile: 'a.txt',
+          mcpServers: { test: { command: 'test-server' } },
+        },
+        { agent: 'gemini', rulesFile: 'b.txt', mcpServers: null },
+        {
+          agent: 'gemini',
           rulesFile: 'b.txt',
           mcpServers: { test: { command: 'test-server' } },
         },
         { agent: 'claude', rulesFile: 'a.txt', mcpServers: null },
+        {
+          agent: 'claude',
+          rulesFile: 'a.txt',
+          mcpServers: { test: { command: 'test-server' } },
+        },
+        { agent: 'claude', rulesFile: 'b.txt', mcpServers: null },
         {
           agent: 'claude',
           rulesFile: 'b.txt',

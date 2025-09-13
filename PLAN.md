@@ -32,20 +32,20 @@ This plan outlines the development of the Terca CLI. Use the checklists below to
 
 ## Milestone 4: Core Test Execution Orchestration
 
-- [ ] Create the main orchestrator module in `src/lib/runner.ts`.
-- [ ] Implement logic to create a unique run directory: `.terca/runs/YYYY-MM-DD-NNN`.
-- [ ] Implement the main loop to iterate through each expanded matrix configuration and each test.
-- [ ] Implement workspace setup logic (copying `workspaceDir`).
-- [ ] Implement the `before` action: `command`.
-- [ ] Integrate the Gemini agent runner.
-- [ ] Implement log file creation for each agent run.
+- [x] Create the main orchestrator module in `src/lib/runner.ts`.
+- [x] Implement logic to create a unique run directory: `.terca/runs/YYYY-MM-DD-NNN`.
+- [x] Implement the main loop to iterate through each expanded matrix configuration and each test.
+- [x] Implement workspace setup logic (copying `workspaceDir`).
+- [x] Implement the `before` action: `command`.
+- [x] Integrate the Gemini agent runner.
+- [x] Implement log file creation for each agent run.
 
 ## Milestone 5: Evaluation and Results
 
-- [ ] Implement the `evaluate` logic within the orchestrator.
-- [ ] Implement the `commandSuccess` evaluator.
-- [ ] Create or update `results.json` in the run directory after each evaluation.
-- [ ] Ensure results are appended correctly for each test.
+- [x] Implement the `evaluate` logic within the orchestrator.
+- [x] Implement the `commandSuccess` evaluator.
+- [x] Create or update `results.json` in the run directory after each evaluation.
+- [x] Ensure results are appended correctly for each test.
 
 ## Milestone 6: Polished CLI User Interface
 
