@@ -1,11 +1,12 @@
-import { expandMatrix, loadConfig } from "./config";
+import { expandMatrix, loadConfig } from "./config.js";
 import { GeminiAgentRunner } from "./runners/gemini.js";
 import { ClaudeAgentRunner } from "./runners/claude.js";
 import { CodexAgentRunner } from "./runners/codex.js";
 import { OpencodeAgentRunner } from "./runners/opencode.js";
-import { AgentRunner, Config, ExpandedMatrix, TercaTest } from "./types";
+import { AgentRunner, Config, ExpandedMatrix, TercaTest } from "./types.js";
 import path from "path";
 import fs from "fs/promises";
+import { createWriteStream } from "fs";
 import { spawn } from "child_process";
 import {
   startSpinner,
@@ -15,7 +16,7 @@ import {
   printHeader,
   printAgentOutput,
   printResults,
-} from "./ui";
+} from "./ui.js";
 
 const AGENT_RUNNERS: Record<string, new () => AgentRunner> = {
   gemini: GeminiAgentRunner,
@@ -136,7 +137,7 @@ async function runBeforeActions(
 ) {
   const actions = [...(config.before || []), ...(test.before || [])];
   for (const action of actions) {
-    if (action.command) {
+    if ("command" in action) {
       const [cmd, ...args] = action.command.split(" ");
       const proc = spawn(cmd, args, {
         cwd: path.join(testRunDir, "workspace"),
@@ -145,13 +146,13 @@ async function runBeforeActions(
       await new Promise((resolve) => {
         proc.on("close", resolve);
       });
-    } else if (action.copy) {
+    } else if ("copy" in action) {
       for (const [src, dest] of Object.entries(action.copy)) {
         await fs.cp(src, path.join(testRunDir, "workspace", dest), {
           recursive: true,
         });
       }
-    } else if (action.files) {
+    } else if ("files" in action) {
       for (const [dest, content] of Object.entries(action.files)) {
         await fs.writeFile(path.join(testRunDir, "workspace", dest), content);
       }
@@ -172,7 +173,7 @@ async function runAgent(
   }
   const runner = new Runner();
   const logFile = path.join(testRunDir, "agent.log");
-  const stream = fs.createWriteStream(logFile);
+  const stream = createWriteStream(logFile);
 
   // TODO: Create temporary files for rules and mcpServers
   const runnerOpts = {
