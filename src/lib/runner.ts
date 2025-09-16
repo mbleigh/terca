@@ -3,19 +3,22 @@ import { GeminiAgentRunner } from "./runners/gemini.js";
 import { ClaudeAgentRunner } from "./runners/claude.js";
 import { CodexAgentRunner } from "./runners/codex.js";
 import { OpencodeAgentRunner } from "./runners/opencode.js";
-import { AgentRunner, Config, ExpandedMatrix, TercaTest } from "./types.js";
+import {
+  AgentRunner,
+  AgentRunnerStats,
+  Config,
+  ExpandedMatrix,
+  TercaTest,
+} from "./types.js";
 import path from "path";
 import fs from "fs/promises";
 import { createWriteStream } from "fs";
 import { spawn } from "child_process";
 import {
-  startSpinner,
-  updateSpinner,
-  succeedSpinner,
-  failSpinner,
   printHeader,
   printAgentOutput,
   printResults,
+  printEvalSummary,
 } from "./ui.js";
 
 const AGENT_RUNNERS: Record<string, new () => AgentRunner> = {
@@ -38,18 +41,24 @@ export async function runTests() {
   for (const test of config.tests) {
     for (const m of matrix) {
       runId++;
-      const spinner = startSpinner(`Running test: ${test.name} (#${runId})`);
+      printHeader(`Running test: ${test.name} (#${runId})`);
       try {
-        const evalResult = await runTest(runDir, config, test, m, runId);
+        const { evalResult, stats } = await runTest(
+          runDir,
+          config,
+          test,
+          m,
+          runId,
+        );
         results.runs.push({
           id: runId,
           test: test.name,
           matrix: m,
           results: evalResult,
+          stats,
         });
-        succeedSpinner(spinner, `Test finished: ${test.name} (#${runId})`);
+        printEvalSummary(test.name, m, evalResult, stats);
       } catch (e: any) {
-        failSpinner(spinner, `Test failed: ${test.name} (#${runId})`);
         console.error(e);
       }
     }
@@ -71,12 +80,21 @@ async function runTest(
   const testRunDir = await setupTestRunDir(runDir, test, runId);
   const logFile = path.join(testRunDir, "run.log");
   const logStream = createWriteStream(logFile);
+  const artifactsDir = path.join(testRunDir, "artifacts");
+  await fs.mkdir(artifactsDir, { recursive: true });
 
   try {
-    await setupWorkspace(testRunDir, config);
-    await runBeforeActions(testRunDir, config, test, logStream);
-    await runAgent(testRunDir, test, matrix, logStream);
-    return await evaluate(testRunDir, test, logStream);
+    const workspaceDir = await setupWorkspace(testRunDir, config);
+    await runBeforeActions(workspaceDir, config, test, logStream);
+    const stats = await runAgent(
+      workspaceDir,
+      artifactsDir,
+      test,
+      matrix,
+      logStream,
+    );
+    const evalResult = await evaluate(workspaceDir, test, logStream);
+    return { evalResult, stats };
   } finally {
     logStream.close();
   }
@@ -118,16 +136,21 @@ async function setupTestRunDir(
   return testRunDir;
 }
 
-async function setupWorkspace(testRunDir: string, config: Config) {
+async function setupWorkspace(
+  testRunDir: string,
+  config: Config,
+): Promise<string> {
+  const workspaceDir = path.join(testRunDir, "workspace");
   if (!config.workspaceDir) {
-    return;
+    await fs.mkdir(workspaceDir, { recursive: true });
+    return workspaceDir;
   }
-  const workspacePath = path.join(testRunDir, "workspace");
-  await fs.cp(config.workspaceDir, workspacePath, { recursive: true });
+  await fs.cp(config.workspaceDir, workspaceDir, { recursive: true });
+  return workspaceDir;
 }
 
 async function runBeforeActions(
-  testRunDir: string,
+  workspaceDir: string,
   config: Config,
   test: TercaTest,
   logStream: NodeJS.WritableStream,
@@ -140,7 +163,7 @@ async function runBeforeActions(
 `);
       const [cmd, ...args] = action.command.split(" ");
       const proc = spawn(cmd, args, {
-        cwd: path.join(testRunDir, "workspace"),
+        cwd: workspaceDir,
         stdio: "pipe",
       });
       proc.stdout?.pipe(logStream, { end: false });
@@ -153,24 +176,25 @@ async function runBeforeActions(
 `);
     } else if ("copy" in action) {
       for (const [src, dest] of Object.entries(action.copy)) {
-        await fs.cp(src, path.join(testRunDir, "workspace", dest), {
+        await fs.cp(src, path.join(workspaceDir, dest), {
           recursive: true,
         });
       }
     } else if ("files" in action) {
       for (const [dest, content] of Object.entries(action.files)) {
-        await fs.writeFile(path.join(testRunDir, "workspace", dest), content);
+        await fs.writeFile(path.join(workspaceDir, dest), content);
       }
     }
   }
 }
 
 async function runAgent(
-  testRunDir: string,
+  workspaceDir: string,
+  artifactsDir: string,
   test: TercaTest,
   matrix: ExpandedMatrix,
   logStream: NodeJS.WritableStream,
-) {
+): Promise<AgentRunnerStats | undefined> {
   const agent = matrix.agent as string;
   const Runner = AGENT_RUNNERS[agent];
   if (!Runner) {
@@ -181,12 +205,14 @@ async function runAgent(
 
   // TODO: Create temporary files for rules and mcpServers
   const runnerOpts = {
-    workspaceDir: path.join(testRunDir, "workspace"),
+    workspaceDir,
+    artifactsDir,
     prompt: test.prompt,
     rulesFile: matrix.rules as string | undefined,
     mcpServers: matrix.mcpServers as any,
   };
 
+  let stats: AgentRunnerStats | undefined;
   logStream.write(`
 --- Running agent: ${agent} ---
 `);
@@ -195,19 +221,23 @@ async function runAgent(
       logStream.write(progress.output);
       printAgentOutput(progress.output);
     }
+    if (progress.stats) {
+      stats = progress.stats;
+    }
   }
   logStream.write(`
 --- End of agent: ${agent} ---
 `);
+  return stats;
 }
 
 async function evaluate(
-  testRunDir: string,
+  workspaceDir: string,
   test: TercaTest,
   logStream: NodeJS.WritableStream,
 ) {
   const results: any = {};
-  for (const evalStep of test.evaluate || []) {
+  for (const evalStep of test.eval || []) {
     if (evalStep.commandSuccess) {
       logStream.write(
         `
@@ -216,7 +246,7 @@ async function evaluate(
       );
       const [cmd, ...args] = evalStep.commandSuccess.split(" ");
       const proc = spawn(cmd, args, {
-        cwd: path.join(testRunDir, "workspace"),
+        cwd: workspaceDir,
         stdio: "pipe",
       });
 
@@ -230,6 +260,25 @@ async function evaluate(
       logStream.write(
         `
 --- End of evaluation command: ${evalStep.commandSuccess} (Exit code: ${exitCode}) ---
+`,
+      );
+    } else if (evalStep.fileExists) {
+      const files = Array.isArray(evalStep.fileExists)
+        ? evalStep.fileExists
+        : [evalStep.fileExists];
+      let allExist = true;
+      for (const file of files) {
+        try {
+          await fs.access(path.join(workspaceDir, file));
+        } catch {
+          allExist = false;
+          break;
+        }
+      }
+      results[evalStep.name] = allExist ? 1.0 : 0.0;
+      logStream.write(
+        `
+--- Evaluation fileExists: ${files.join(", ")} (Result: ${results[evalStep.name]}) ---
 `,
       );
     }

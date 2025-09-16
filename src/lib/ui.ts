@@ -1,9 +1,7 @@
-import chalk from "chalk";
+import * as c from "./colors.js";
 import ora from "ora";
-import logUpdate from "log-update";
-import Table from "cli-table3";
-
-const outputLines: string[] = [];
+import { stringify } from "yaml";
+import { AgentRunnerStats, ExpandedMatrix } from "./types.js";
 
 export function startSpinner(text: string) {
   const spinner = ora(text).start();
@@ -24,49 +22,140 @@ export function failSpinner(spinner: ora.Ora, text: string) {
 
 export function printHeader(text: string) {
   console.log(
-    chalk.bold(`
+    c.bold(`
 === ${text} ===
 `),
   );
 }
 
 export function printAgentOutput(output: string) {
-  outputLines.push(...output.split("\n"));
-  if (outputLines.length > 10) {
-    outputLines.splice(0, outputLines.length - 10);
+  process.stdout.write(output);
+}
+
+export function printEvalSummary(
+  testName: string,
+  matrix: ExpandedMatrix,
+  results: any,
+  stats: AgentRunnerStats | undefined,
+) {
+  const matrixId = Object.entries(matrix)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(", ");
+  console.log(
+    c.bold(`
+--- Evaluation Summary for ${testName} (${matrixId}) ---
+`),
+  );
+  for (const [evalName, result] of Object.entries(results)) {
+    const icon = result === 1.0 ? c.green("✔︎") : c.red("✖︎");
+    const label = result === 1.0 ? "Pass" : "Fail";
+    console.log(`  ${icon} ${evalName}: ${label}`);
   }
-  logUpdate(outputLines.join("\n"));
+  if (stats) {
+    console.log(
+      c.bold(`
+  Agent Stats:
+`),
+    );
+    console.log(`    Duration: ${stats.durationSeconds.toFixed(2)}s`);
+    console.log(`    Requests: ${stats.requests}`);
+    console.log(
+      `    Tokens: ${stats.inputTokens} (in) / ${stats.outputTokens} (out)`,
+    );
+  }
 }
 
 export function printResults(results: { runs: any[] }) {
-  logUpdate.clear();
-  printHeader("Results");
+  printHeader("Terca Run Summary");
 
-  const table = new Table({
-    head: ["Run #", "Test", "Matrix", "Score"],
-    colWidths: [10, 20, 40, 10],
-  });
+  let overallPassed = 0;
+  let overallNeutral = 0;
+  let overallFailed = 0;
 
-  for (const run of results.runs) {
-    const matrixId = Object.entries(run.matrix)
-      .map(([k, v]) => {
-        if (typeof v === "object" && v !== null) {
-          return `${k}=${JSON.stringify(v)}`;
+  const runsByMatrix = results.runs.reduce(
+    (acc, run) => {
+      const matrixKey = JSON.stringify(run.matrix);
+      if (!acc[matrixKey]) {
+        acc[matrixKey] = {
+          matrix: run.matrix,
+          tests: [],
+        };
+      }
+      acc[matrixKey].tests.push(run);
+      return acc;
+    },
+    {} as Record<string, { matrix: any; tests: any[] }>,
+  );
+
+  let matrixId = 0;
+  for (const matrixKey in runsByMatrix) {
+    matrixId++;
+    const { matrix, tests } = runsByMatrix[matrixKey];
+    console.log(
+      c.bold(`
+=== Matrix Config #${matrixId.toString().padStart(2, "0")} ===`),
+    );
+    console.log(stringify(matrix));
+
+    for (const test of tests) {
+      let passed = 0;
+      let neutral = 0;
+      let failed = 0;
+
+      for (const score of Object.values(test.results)) {
+        const numericScore = score as number;
+        if (numericScore === 1.0) passed++;
+        else if (numericScore > 0.0 && numericScore < 1.0) neutral++;
+        else failed++;
+      }
+
+      overallPassed += passed;
+      overallNeutral += neutral;
+      overallFailed += failed;
+
+      const summaryParts = [];
+      if (passed > 0) summaryParts.push(c.green(`${passed} passed`));
+      if (neutral > 0) summaryParts.push(c.yellow(`${neutral} neutral`));
+      if (failed > 0) summaryParts.push(c.red(`${failed} failed`));
+
+      console.log(`
+--- ${test.test} (${summaryParts.join(", ")}) ---`);
+
+      if (test.stats) {
+        console.log(
+          c.gray(
+            `  (duration: ${test.stats.durationSeconds.toFixed(
+              2,
+            )}s, tokens: ${test.stats.inputTokens} in / ${
+              test.stats.outputTokens
+            } out)`,
+          ),
+        );
+      }
+
+      for (const [evalName, score] of Object.entries(test.results)) {
+        const numericScore = score as number;
+        if (numericScore === 1.0) {
+          console.log(`  ${c.green("✔︎")} ${evalName}`);
+        } else if (numericScore > 0.0 && numericScore < 1.0) {
+          console.log(`  ${c.yellow("~")} ${evalName} (${numericScore})`);
+        } else {
+          console.log(`  ${c.red("✖︎")} ${evalName}`);
         }
-        return `${k}=${v}`;
-      })
-      .join(", ");
-
-    const evalScores = Object.values(run.results);
-    const scoreSum = evalScores.reduce(
-      (acc: number, val: any) => acc + val,
-      0,
-    ) as number;
-    const avgScore = evalScores.length > 0 ? scoreSum / evalScores.length : 0;
-
-    const color = avgScore > 0.7 ? "green" : avgScore > 0.5 ? "yellow" : "red";
-    table.push([run.id, run.test, matrixId, chalk[color](avgScore.toFixed(2))]);
+      }
+    }
   }
 
-  console.log(table.toString());
+  const overallSummaryParts = [];
+  if (overallPassed > 0)
+    overallSummaryParts.push(c.green(`${overallPassed} passed`));
+  if (overallNeutral > 0)
+    overallSummaryParts.push(c.yellow(`${overallNeutral} neutral`));
+  if (overallFailed > 0)
+    overallSummaryParts.push(c.red(`${overallFailed} failed`));
+
+  console.log(
+    c.bold(`
+OVERALL: ${overallSummaryParts.join(", ")}`),
+  );
 }

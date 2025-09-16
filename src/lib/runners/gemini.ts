@@ -3,15 +3,28 @@ import {
   AgentRunner,
   AgentRunnerOptions,
   AgentRunnerProgress,
+  AgentRunnerStats,
 } from "../types.js";
 import fs from "fs/promises";
 import path from "path";
 
 export class GeminiAgentRunner implements AgentRunner {
   async *run(options: AgentRunnerOptions): AsyncIterable<AgentRunnerProgress> {
-    const args = ["-p", options.prompt, "--yolo"];
-    const geminiDir = path.join(options.workspaceDir, ".gemini");
+    const startTime = Date.now();
+    const geminiDir = path.join(options.artifactsDir, ".gemini");
     const settingsFile = path.join(geminiDir, "settings.json");
+    const summaryFile = path.join(geminiDir, "summary.json");
+    const summaryFileRelative = path.relative(
+      options.workspaceDir,
+      summaryFile,
+    );
+    const args = [
+      "-p",
+      options.prompt,
+      "--yolo",
+      "--session-summary",
+      summaryFileRelative,
+    ];
 
     try {
       await fs.mkdir(geminiDir, { recursive: true });
@@ -58,7 +71,25 @@ export class GeminiAgentRunner implements AgentRunner {
         child.on("close", resolve);
       });
 
-      yield { done: true, exitCode };
+      let stats: AgentRunnerStats | undefined;
+      try {
+        const summaryJson = await fs.readFile(summaryFile, "utf-8");
+        const summary = JSON.parse(summaryJson);
+        const modelMetrics = summary.sessionMetrics.models[""];
+        if (modelMetrics) {
+          stats = {
+            requests: modelMetrics.api.totalRequests,
+            inputTokens: modelMetrics.tokens.prompt,
+            cachedInputTokens: modelMetrics.tokens.cached,
+            outputTokens: modelMetrics.tokens.candidates,
+            durationSeconds: (Date.now() - startTime) / 1000,
+          };
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      yield { done: true, exitCode, stats };
     } finally {
       await fs.rm(geminiDir, { recursive: true, force: true });
     }
