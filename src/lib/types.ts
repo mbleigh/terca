@@ -43,10 +43,22 @@ export const TercaBeforeActionSchema = z.union([
 ]);
 export type TercaBeforeAction = z.infer<typeof TercaBeforeActionSchema>;
 
-export const TercaEvaluatorSchema = z.object({
-  name: z.string(),
+export const TercaEvaluatorActionsSchema = z.object({
   commandSuccess: z.string().optional(),
   fileExists: z.union([z.string(), z.array(z.string())]).optional(),
+});
+export type TercaEvaluatorActions = z.infer<typeof TercaEvaluatorActionsSchema>;
+export type TercaEvaluatorActionType = keyof TercaEvaluatorActions;
+
+export interface TercaEvaluatorResult {
+  /** Score between 0.0 and 1.0 */
+  score: number;
+  /** Optional message to go along with the score */
+  message?: string;
+}
+
+export const TercaEvaluatorSchema = TercaEvaluatorActionsSchema.extend({
+  name: z.string(),
 });
 export type TercaEvaluator = z.infer<typeof TercaEvaluatorSchema>;
 

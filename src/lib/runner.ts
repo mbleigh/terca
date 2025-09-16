@@ -20,6 +20,7 @@ import {
   printResults,
   printEvalSummary,
 } from "./ui.js";
+import * as evalActions from "./eval-actions.js";
 
 const AGENT_RUNNERS: Record<string, new () => AgentRunner> = {
   gemini: GeminiAgentRunner,
@@ -237,50 +238,22 @@ async function evaluate(
   logStream: NodeJS.WritableStream,
 ) {
   const results: any = {};
+  const evalCtx: evalActions.EvalActionContext = {
+    workspaceDir,
+    test,
+    logStream,
+  };
+
   for (const evalStep of test.eval || []) {
     if (evalStep.commandSuccess) {
-      logStream.write(
-        `
---- Running evaluation command: ${evalStep.commandSuccess} ---
-`,
+      const result = await evalActions.commandSuccess(
+        evalCtx,
+        evalStep.commandSuccess,
       );
-      const [cmd, ...args] = evalStep.commandSuccess.split(" ");
-      const proc = spawn(cmd, args, {
-        cwd: workspaceDir,
-        stdio: "pipe",
-      });
-
-      proc.stdout?.pipe(logStream, { end: false });
-      proc.stderr?.pipe(logStream, { end: false });
-
-      const exitCode = await new Promise((resolve) => {
-        proc.on("close", resolve);
-      });
-      results[evalStep.name] = exitCode === 0 ? 1.0 : 0.0;
-      logStream.write(
-        `
---- End of evaluation command: ${evalStep.commandSuccess} (Exit code: ${exitCode}) ---
-`,
-      );
+      results[evalStep.name] = result.score;
     } else if (evalStep.fileExists) {
-      const files = Array.isArray(evalStep.fileExists)
-        ? evalStep.fileExists
-        : [evalStep.fileExists];
-      let allExist = true;
-      for (const file of files) {
-        try {
-          await fs.access(path.join(workspaceDir, file));
-        } catch {
-          allExist = false;
-          break;
-        }
-      }
-      results[evalStep.name] = allExist ? 1.0 : 0.0;
-      logStream.write(
-        `
---- Evaluation fileExists: ${files.join(", ")} (Result: ${results[evalStep.name]}) ---
-`,
-      );
+      const result = await evalActions.fileExists(evalCtx, evalStep.fileExists);
+      results[evalStep.name] = result.score;
     }
   }
   return results;
