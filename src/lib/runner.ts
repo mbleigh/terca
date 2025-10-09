@@ -87,6 +87,7 @@ async function runTest(
   try {
     const workspaceDir = await setupWorkspace(testRunDir, config);
     await runBeforeActions(workspaceDir, config, test, logStream);
+    await runMatrixCommand(workspaceDir, matrix, logStream);
     const stats = await runAgent(
       workspaceDir,
       artifactsDir,
@@ -187,6 +188,34 @@ async function runBeforeActions(
       }
     }
   }
+}
+
+async function runMatrixCommand(
+  workspaceDir: string,
+  matrix: ExpandedMatrix,
+  logStream: NodeJS.WritableStream,
+) {
+  const command = matrix.command as string | undefined;
+  if (!command) {
+    return;
+  }
+
+  logStream.write(`
+--- Running matrix command: ${command} ---
+`);
+  const [cmd, ...args] = command.split(" ");
+  const proc = spawn(cmd, args, {
+    cwd: workspaceDir,
+    stdio: "pipe",
+  });
+  proc.stdout?.pipe(logStream, { end: false });
+  proc.stderr?.pipe(logStream, { end: false });
+  await new Promise((resolve) => {
+    proc.on("close", resolve);
+  });
+  logStream.write(`
+--- End of matrix command: ${command} ---
+`);
 }
 
 async function runAgent(

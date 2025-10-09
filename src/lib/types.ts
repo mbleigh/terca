@@ -33,6 +33,9 @@ export const MatrixEntrySchema = z.object({
       z.array(z.union([McpServersConfigSchema, z.null()])),
     ])
     .optional(),
+  command: z
+    .union([z.string(), z.array(z.union([z.string(), z.null()]))])
+    .optional(),
 });
 export type MatrixEntry = z.infer<typeof MatrixEntrySchema>;
 
