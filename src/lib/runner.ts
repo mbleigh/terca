@@ -37,6 +37,7 @@ export async function runTests() {
   printHeader(`Terca Run: ${runDir}`);
 
   const results: { runs: any[] } = { runs: [] };
+  const resultsFile = path.join(runDir, "results.json");
 
   let runId = 0;
   for (const test of config.tests) {
@@ -61,12 +62,19 @@ export async function runTests() {
         printEvalSummary(test.name, m, evalResult, stats);
       } catch (e: any) {
         console.error(e);
+        results.runs.push({
+          id: runId,
+          test: test.name,
+          matrix: m,
+          error: {
+            message: e.message,
+            stack: e.stack,
+          },
+        });
       }
+      await fs.writeFile(resultsFile, JSON.stringify(results, null, 2));
     }
   }
-
-  const resultsFile = path.join(runDir, "results.json");
-  await fs.writeFile(resultsFile, JSON.stringify(results, null, 2));
 
   printResults(results);
 }
