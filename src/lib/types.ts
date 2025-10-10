@@ -69,6 +69,7 @@ export const TercaTestSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   prompt: z.string(),
+  repetitions: z.number().optional(),
   before: z.array(TercaBeforeActionSchema).optional(),
   eval: z.array(TercaEvaluatorSchema).optional(),
 });
@@ -78,6 +79,8 @@ export const TercaConfigSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   workspaceDir: z.string().optional(),
+  repetitions: z.number().optional(),
+  concurrency: z.number().optional(),
   matrix: z.array(MatrixEntrySchema),
   before: z.array(TercaBeforeActionSchema).optional(),
   tests: z.array(TercaTestSchema),

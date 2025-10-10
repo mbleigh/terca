@@ -11,12 +11,13 @@ import path from "path";
 export class GeminiAgentRunner implements AgentRunner {
   async *run(options: AgentRunnerOptions): AsyncIterable<AgentRunnerProgress> {
     const startTime = Date.now();
-    const geminiDir = path.join(options.artifactsDir, ".gemini");
+    const geminiDir = path.join(options.workspaceDir, ".gemini");
     const settingsFile = path.join(geminiDir, "settings.json");
     const args = ["-p", options.prompt, "--yolo", "--output-format", "json"];
 
     try {
       await fs.mkdir(geminiDir, { recursive: true });
+      await fs.mkdir(options.artifactsDir, { recursive: true });
 
       let settings: any = {};
       try {
@@ -52,6 +53,12 @@ export class GeminiAgentRunner implements AgentRunner {
           ...options.mcpServers,
         };
       }
+
+      settings.telemetry = {
+        enabled: true,
+        target: "local",
+        outfile: path.resolve(options.artifactsDir, "telemetry.log"),
+      };
 
       if (Object.keys(settings).length > 0) {
         await fs.writeFile(settingsFile, JSON.stringify(settings, null, 2));

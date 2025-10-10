@@ -11,6 +11,7 @@ import {
   TercaTest,
 } from "./types.js";
 import path from "path";
+import os from "os";
 import fs from "fs/promises";
 import { createWriteStream } from "fs";
 import { spawn } from "child_process";
@@ -35,25 +36,34 @@ interface RunDisplayState {
   error?: any;
 }
 
-export async function runTests() {
+export async function runTests(options: {
+  repetitions?: number;
+  concurrency?: number;
+}) {
   const config = await loadConfig();
   const matrix = expandMatrix(config.matrix);
   const runDir = await createRunDir();
-  const concurrency = (config as any).concurrency || 3;
+  const concurrency = options.concurrency || config.concurrency || 3;
 
   printHeader(`Terca Run: ${runDir}`);
 
   const allTestRuns = [];
   let runId = 0;
+  const suiteRepetitions = options.repetitions || config.repetitions || 1;
+
   for (const test of config.tests) {
-    for (const m of matrix) {
-      runId++;
-      allTestRuns.push({
-        id: runId,
-        test,
-        matrix: m,
-        name: test.name,
-      });
+    const testRepetitions = test.repetitions || 1;
+    const totalRepetitions = suiteRepetitions * testRepetitions;
+    for (let i = 0; i < totalRepetitions; i++) {
+      for (const m of matrix) {
+        runId++;
+        allTestRuns.push({
+          id: runId,
+          test,
+          matrix: m,
+          name: `${test.name} (repetition ${i + 1})`,
+        });
+      }
     }
   }
 
@@ -72,7 +82,7 @@ export async function runTests() {
       let line = `${state.id.toString().padStart(3, "0")}: `;
       if (state.status === "complete") {
         const passed = Object.values(state.results || {}).filter(
-          (r) => r > 0,
+          (r) => (r as number) > 0,
         ).length;
         const total = Object.values(state.results || {}).length;
         line += `complete\n`;
@@ -228,9 +238,21 @@ async function setupTestRunDir(
   test: TercaTest,
   runId: number,
 ): Promise<string> {
-  const testRunDir = path.join(runDir, runId.toString());
-  await fs.mkdir(testRunDir, { recursive: true });
-  return testRunDir;
+  // Sanitize test name for directory
+  const sanitizedTestName = test.name.replace(/[\W_]+/g, "-").toLowerCase();
+
+  // Create a unique temporary directory for the test run
+  const tempDirPrefix = path.join(os.tmpdir(), `terca-${sanitizedTestName}-`);
+  const testRunTempDir = await fs.mkdtemp(tempDirPrefix);
+
+  // This is where the symlink will live, inside the .terca directory structure
+  const symlinkPath = path.join(runDir, runId.toString());
+
+  // Create a symlink from the .terca directory to the temporary directory
+  await fs.symlink(testRunTempDir, symlinkPath, "dir");
+
+  // Return the path to the temporary directory, which will be used as the test run directory
+  return testRunTempDir;
 }
 
 async function setupWorkspace(
