@@ -14,13 +14,9 @@ import path from "path";
 import fs from "fs/promises";
 import { createWriteStream } from "fs";
 import { spawn } from "child_process";
-import {
-  printHeader,
-  printAgentOutput,
-  printResults,
-  printEvalSummary,
-} from "./ui.js";
+import { printHeader, printResults } from "./ui.js";
 import * as evalActions from "./eval-actions.js";
+import logUpdate from "log-update";
 
 const AGENT_RUNNERS: Record<string, new () => AgentRunner> = {
   gemini: GeminiAgentRunner,
@@ -29,52 +25,141 @@ const AGENT_RUNNERS: Record<string, new () => AgentRunner> = {
   opencode: OpencodeAgentRunner,
 };
 
+interface RunDisplayState {
+  id: number;
+  name: string;
+  status: "pending" | "running" | "complete" | "error";
+  message: string;
+  logFile?: string;
+  results?: any;
+  error?: any;
+}
+
 export async function runTests() {
   const config = await loadConfig();
   const matrix = expandMatrix(config.matrix);
   const runDir = await createRunDir();
+  const concurrency = (config as any).concurrency || 3;
 
   printHeader(`Terca Run: ${runDir}`);
 
-  const results: { runs: any[] } = { runs: [] };
-  const resultsFile = path.join(runDir, "results.json");
-
+  const allTestRuns = [];
   let runId = 0;
   for (const test of config.tests) {
     for (const m of matrix) {
       runId++;
-      printHeader(`Running test: ${test.name} (#${runId})`);
+      allTestRuns.push({
+        id: runId,
+        test,
+        matrix: m,
+        name: test.name,
+      });
+    }
+  }
+
+  const runStates: RunDisplayState[] = allTestRuns.map((run) => ({
+    id: run.id,
+    name: run.name,
+    status: "pending",
+    message: "(pending)",
+  }));
+
+  const renderInterval = setInterval(() => {
+    let output = `=== ${config.name || "Terca"} ===\n`;
+    output += `see ${path.join(runDir, "results.json")}\n`;
+
+    for (const state of runStates) {
+      let line = `${state.id.toString().padStart(3, "0")}: `;
+      if (state.status === "complete") {
+        const passed = Object.values(state.results || {}).filter(
+          (r) => r > 0,
+        ).length;
+        const total = Object.values(state.results || {}).length;
+        line += `complete\n`;
+        if (state.logFile) {
+          line += `  - log: ${state.logFile}\n`;
+        }
+        if (total > 0) {
+          line += `  - results: ${passed}/${total} passed\n`;
+        }
+      } else if (state.status === "error") {
+        line += `error: ${state.error?.message}\n`;
+        if (state.logFile) {
+          line += `  - log: ${state.logFile}\n`;
+        }
+      } else {
+        line += `${state.message}\n`;
+        if (state.logFile) {
+          line += `  - log: ${state.logFile}\n`;
+        }
+      }
+      output += line;
+    }
+    logUpdate(output);
+  }, 100);
+
+  const results: { runs: any[] } = { runs: [] };
+  const resultsFile = path.join(runDir, "results.json");
+  const queue = [...allTestRuns];
+
+  async function worker() {
+    while (queue.length > 0) {
+      const run = queue.shift()!;
+      const runState = runStates.find((s) => s.id === run.id)!;
+
       try {
         const { evalResult, stats } = await runTest(
           runDir,
           config,
-          test,
-          m,
-          runId,
+          run.test,
+          run.matrix,
+          run.id,
+          runState,
         );
+
+        runState.status = "complete";
+        runState.message = "complete";
+        runState.results = evalResult;
+
         results.runs.push({
-          id: runId,
-          test: test.name,
-          matrix: m,
+          id: run.id,
+          test: run.test.name,
+          matrix: run.matrix,
           results: evalResult,
           stats,
         });
-        printEvalSummary(test.name, m, evalResult, stats);
       } catch (e: any) {
-        console.error(e);
+        runState.status = "error";
+        runState.message = `error: ${e.message}`;
+        runState.error = e;
         results.runs.push({
-          id: runId,
-          test: test.name,
-          matrix: m,
+          id: run.id,
+          test: run.test.name,
+          matrix: run.matrix,
           error: {
             message: e.message,
             stack: e.stack,
           },
         });
+      } finally {
+        // This is not perfectly atomic, but should be fine for this use case.
+        await fs.writeFile(resultsFile, JSON.stringify(results, null, 2));
       }
-      await fs.writeFile(resultsFile, JSON.stringify(results, null, 2));
     }
   }
+
+  const workers = [];
+  for (let i = 0; i < concurrency; i++) {
+    workers.push(worker());
+  }
+
+  await Promise.all(workers);
+
+  clearInterval(renderInterval);
+  logUpdate.clear();
+  console.log(
+    `\n=== Terca Run Complete: ${runDir} ===\nSee ${resultsFile} for full results.\n`,
+  );
 
   printResults(results);
 }
@@ -85,25 +170,27 @@ async function runTest(
   test: TercaTest,
   matrix: ExpandedMatrix,
   runId: number,
+  runState: RunDisplayState,
 ) {
   const testRunDir = await setupTestRunDir(runDir, test, runId);
-  const logFile = path.join(testRunDir, "run.log");
-  const logStream = createWriteStream(logFile);
+  runState.logFile = path.join(testRunDir, "run.log");
+  const logStream = createWriteStream(runState.logFile);
   const artifactsDir = path.join(testRunDir, "artifacts");
   await fs.mkdir(artifactsDir, { recursive: true });
 
   try {
     const workspaceDir = await setupWorkspace(testRunDir, config);
-    await runBeforeActions(workspaceDir, config, test, logStream);
-    await runMatrixCommand(workspaceDir, matrix, logStream);
+    await runBeforeActions(workspaceDir, config, test, logStream, runState);
+    await runMatrixCommand(workspaceDir, matrix, logStream, runState);
     const stats = await runAgent(
       workspaceDir,
       artifactsDir,
       test,
       matrix,
       logStream,
+      runState,
     );
-    const evalResult = await evaluate(workspaceDir, test, logStream);
+    const evalResult = await evaluate(workspaceDir, test, logStream, runState);
     return { evalResult, stats };
   } finally {
     logStream.close();
@@ -141,7 +228,7 @@ async function setupTestRunDir(
   test: TercaTest,
   runId: number,
 ): Promise<string> {
-  const testRunDir = path.join(runDir, test.name, runId.toString());
+  const testRunDir = path.join(runDir, runId.toString());
   await fs.mkdir(testRunDir, { recursive: true });
   return testRunDir;
 }
@@ -164,10 +251,12 @@ async function runBeforeActions(
   config: Config,
   test: TercaTest,
   logStream: NodeJS.WritableStream,
+  runState: RunDisplayState,
 ) {
   const actions = [...(config.before || []), ...(test.before || [])];
   for (const action of actions) {
     if ("command" in action) {
+      runState.message = `before: running \`${action.command}\``;
       logStream.write(`
 --- Running before command: ${action.command} ---
 `);
@@ -185,12 +274,14 @@ async function runBeforeActions(
 --- End of before command: ${action.command} ---
 `);
     } else if ("copy" in action) {
+      runState.message = `before: copying files`;
       for (const [src, dest] of Object.entries(action.copy)) {
         await fs.cp(src, path.join(workspaceDir, dest), {
           recursive: true,
         });
       }
     } else if ("files" in action) {
+      runState.message = `before: writing files`;
       for (const [dest, content] of Object.entries(action.files)) {
         await fs.writeFile(path.join(workspaceDir, dest), content);
       }
@@ -202,12 +293,14 @@ async function runMatrixCommand(
   workspaceDir: string,
   matrix: ExpandedMatrix,
   logStream: NodeJS.WritableStream,
+  runState: RunDisplayState,
 ) {
   const command = matrix.command as string | undefined;
   if (!command) {
     return;
   }
 
+  runState.message = `matrix: running \`${command}\``;
   logStream.write(`
 --- Running matrix command: ${command} ---
 `);
@@ -232,6 +325,7 @@ async function runAgent(
   test: TercaTest,
   matrix: ExpandedMatrix,
   logStream: NodeJS.WritableStream,
+  runState: RunDisplayState,
 ): Promise<AgentRunnerStats | undefined> {
   const agent = matrix.agent as string;
   const Runner = AGENT_RUNNERS[agent];
@@ -240,6 +334,7 @@ async function runAgent(
     return;
   }
   const runner = new Runner();
+  runState.message = `agent \`${agent}\` running...`;
 
   // TODO: Create temporary files for rules and mcpServers
   const runnerOpts = {
@@ -257,7 +352,6 @@ async function runAgent(
   for await (const progress of runner.run(runnerOpts)) {
     if (progress.output) {
       logStream.write(progress.output);
-      printAgentOutput(progress.output);
     }
     if (progress.stats) {
       stats = progress.stats;
@@ -273,6 +367,7 @@ async function evaluate(
   workspaceDir: string,
   test: TercaTest,
   logStream: NodeJS.WritableStream,
+  runState: RunDisplayState,
 ) {
   const results: any = {};
   const evalCtx: evalActions.EvalActionContext = {
@@ -281,7 +376,10 @@ async function evaluate(
     logStream,
   };
 
-  for (const evalStep of test.eval || []) {
+  for (const [i, evalStep] of (test.eval || []).entries()) {
+    runState.message = `evaluating: ${evalStep.name} (${i + 1}/${
+      test.eval?.length
+    })`;
     if (evalStep.commandSuccess) {
       const result = await evalActions.commandSuccess(
         evalCtx,

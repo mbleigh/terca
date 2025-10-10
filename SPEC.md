@@ -9,11 +9,11 @@ I have written an example terca spec in `terca.yaml` -- this contains examples o
 You will create a common `AgentRunner` interface:
 
 ```ts
-interface AgentRunnerOptions<
-  ProviderConfig extends Record<string, unknown> = Record<string, unknown>
-> {
+interface AgentRunnerOptions {
   /** directory in which to start the runner */
   workspaceDir: string;
+  /** directory in which the agent can store artifacts */
+  artifactsDir: string;
   /** prompt with which to start the agent */
   prompt: string;
   /** path to a file containing rules/instructions for the agent */
@@ -21,13 +21,24 @@ interface AgentRunnerOptions<
   /** mcp server config with which to run the agent e.g. {firebase: {command: 'firebase', args: ['mcp'], env?: Record<string,string>, cwd?: string}, ...etc} */
   mcpServers?: Record<string, McpServerConfig>;
   /** additional non-standardized config that can be applied to the agent */
-  config?: ProviderConfig;
+  config?: any;
 }
 
-interface AgentRunner<
-  ProviderConfig extends Record<string, unknown> = Record<string, unknown>
-> {
+interface AgentRunner {
   run(options: AgentRunnerOptions): AsyncIterable<AgentRunnerProgress>;
+}
+
+interface AgentRunnerStats {
+  /** number of requests made to the model */
+  requests: number;
+  /** total count of input tokens */
+  inputTokens: number;
+  /** count of input tokens that were cached */
+  cachedInputTokens: number;
+  /** total count of output tokens */
+  outputTokens: number;
+  /** how long the runner took in total in seconds */
+  durationSeconds: number;
 }
 
 interface AgentRunnerProgress {
@@ -37,6 +48,8 @@ interface AgentRunnerProgress {
   exitCode?: number;
   /** if this chunk contains text output, include it here */
   output?: string;
+  /** usage information about the run, only provided on last chunk */
+  stats?: AgentRunnerStats;
 }
 ```
 
@@ -55,9 +68,9 @@ Notes on agent runners:
 - it should create a `.terca/runs/YYYY-MM-DD-NNN` directory when it starts running where NNN is numbered sequentially based on existing dirs
 - inside that dir, it should keep log files containing full output for each of the matrix runs
 - it should also keep a running `results.json` file containing test results for each named test/eval
-- consider eval scores of >0.7 green, >0.5 yellow, and <0.5 red for display purposes
-- running one agent at a time is fine for now
-- ideally, it should show a running "window" of ~10 lines of output from the current agent running
+- eval scores are colored based on the result: green for 1.0 (pass), yellow for scores between 0.0 and 1.0 (partial), and red for 0.0 (fail).
+- tests are run in parallel with a configurable concurrency level.
+- it should show high-level status updates for each running test. Full agent output is streamed to log files.
 - when all tests are complete, it should show a nice table of output displaying the contents of `results.json`
 
 ## Technologies

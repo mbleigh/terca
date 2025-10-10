@@ -18,19 +18,39 @@ export class GeminiAgentRunner implements AgentRunner {
     try {
       await fs.mkdir(geminiDir, { recursive: true });
 
-      const settings: any = {};
+      let settings: any = {};
+      try {
+        settings = JSON.parse(await fs.readFile(settingsFile, "utf-8"));
+      } catch (e: any) {
+        if (e.code !== "ENOENT") {
+          throw e;
+        }
+      }
 
       if (options.rulesFile) {
-        const rulesDest = path.join(
-          options.workspaceDir,
-          path.basename(options.rulesFile),
-        );
+        const rulesBasename = path.basename(options.rulesFile);
+        const rulesDest = path.join(options.workspaceDir, rulesBasename);
         await fs.copyFile(options.rulesFile, rulesDest);
-        settings.context = { fileName: path.basename(options.rulesFile) };
+
+        settings.context ??= {};
+        if (!settings.context.fileName) {
+          settings.context.fileName = rulesBasename;
+        } else {
+          const filenames = Array.isArray(settings.context.fileName)
+            ? settings.context.fileName
+            : [settings.context.fileName];
+          if (!filenames.includes(rulesBasename)) {
+            filenames.push(rulesBasename);
+          }
+          settings.context.fileName = filenames;
+        }
       }
 
       if (options.mcpServers) {
-        settings.mcpServers = options.mcpServers;
+        settings.mcpServers = {
+          ...(settings.mcpServers || {}),
+          ...options.mcpServers,
+        };
       }
 
       if (Object.keys(settings).length > 0) {
