@@ -118,6 +118,10 @@ export function printResults(results: { runs: any[] }) {
       if (neutral > 0) summaryParts.push(c.yellow(`${neutral} neutral`));
       if (failed > 0) summaryParts.push(c.red(`${failed} failed`));
 
+      if (test.stats?.timedOut) {
+        summaryParts.push(c.red("(timed out)"));
+      }
+
       console.log(`
 --- ${test.test} (${summaryParts.join(", ")}) ---`);
 

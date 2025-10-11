@@ -370,6 +370,15 @@ async function runAgent(
     .join("\n\n")
     .trim();
 
+  const controller = new AbortController();
+  const timeoutSeconds = test.timeoutSeconds || config.timeoutSeconds || 300;
+  let timedOut = false;
+
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutSeconds * 1000);
+
   // TODO: Create temporary files for rules and mcpServers
   const runnerOpts = {
     workspaceDir,
@@ -377,23 +386,31 @@ async function runAgent(
     prompt,
     rulesFile: matrix.rules as string | undefined,
     mcpServers: matrix.mcpServers as any,
+    signal: controller.signal,
   };
 
   let stats: AgentRunnerStats | undefined;
   logStream.write(`
 --- Running agent: ${agent} ---
 `);
-  for await (const progress of runner.run(runnerOpts)) {
-    if (progress.output) {
-      logStream.write(progress.output);
+  try {
+    for await (const progress of runner.run(runnerOpts)) {
+      if (progress.output) {
+        logStream.write(progress.output);
+      }
+      if (progress.stats) {
+        stats = progress.stats;
+      }
     }
-    if (progress.stats) {
-      stats = progress.stats;
-    }
+  } finally {
+    clearTimeout(timeout);
   }
   logStream.write(`
 --- End of agent: ${agent} ---
 `);
+  if (timedOut && stats) {
+    stats.timedOut = true;
+  }
   return stats;
 }
 

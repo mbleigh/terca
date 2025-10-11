@@ -71,6 +71,7 @@ export const TercaTestSchema = z.object({
   prompt: z.string(),
   workspaceDir: z.string().optional(),
   repetitions: z.number().optional(),
+  timeoutSeconds: z.number().optional(),
   before: z.array(TercaBeforeActionSchema).optional(),
   eval: z.array(TercaEvaluatorSchema).optional(),
 });
@@ -85,6 +86,7 @@ export const TercaConfigSchema = z.object({
   workspaceDir: z.string().optional(),
   repetitions: z.number().optional(),
   concurrency: z.number().optional(),
+  timeoutSeconds: z.number().optional(),
   before: z.array(TercaBeforeActionSchema).optional(),
   tests: z.array(TercaTestSchema),
   matrix: z.array(MatrixEntrySchema).optional(),
@@ -102,6 +104,7 @@ export interface AgentRunnerOptions {
   rulesFile?: string;
   mcpServers?: McpServersConfig;
   config?: any;
+  signal?: AbortSignal;
 }
 
 export interface AgentRunnerStats {
@@ -115,6 +118,8 @@ export interface AgentRunnerStats {
   outputTokens: number;
   /** how long the runner took in total in seconds */
   durationSeconds: number;
+  /** whether the run timed out */
+  timedOut?: boolean;
 }
 
 export interface AgentRunnerProgress {
