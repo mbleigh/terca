@@ -41,7 +41,7 @@ export async function runTests(options: {
   concurrency?: number;
 }) {
   const config = await loadConfig();
-  const matrix = expandMatrix(config.matrix);
+  const matrix = expandMatrix(config.matrix || []);
   const runDir = await createRunDir();
   const concurrency = options.concurrency || config.concurrency || 3;
 
@@ -189,12 +189,13 @@ async function runTest(
   await fs.mkdir(artifactsDir, { recursive: true });
 
   try {
-    const workspaceDir = await setupWorkspace(testRunDir, config);
+    const workspaceDir = await setupWorkspace(testRunDir, config, test);
     await runBeforeActions(workspaceDir, config, test, logStream, runState);
     await runMatrixCommand(workspaceDir, matrix, logStream, runState);
     const stats = await runAgent(
       workspaceDir,
       artifactsDir,
+      config,
       test,
       matrix,
       logStream,
@@ -258,13 +259,15 @@ async function setupTestRunDir(
 async function setupWorkspace(
   testRunDir: string,
   config: Config,
+  test: TercaTest,
 ): Promise<string> {
   const workspaceDir = path.join(testRunDir, "workspace");
-  if (!config.workspaceDir) {
+  const sourceDir = test.workspaceDir || config.workspaceDir;
+  if (!sourceDir) {
     await fs.mkdir(workspaceDir, { recursive: true });
     return workspaceDir;
   }
-  await fs.cp(config.workspaceDir, workspaceDir, { recursive: true });
+  await fs.cp(sourceDir, workspaceDir, { recursive: true });
   return workspaceDir;
 }
 
@@ -298,14 +301,17 @@ async function runBeforeActions(
     } else if ("copy" in action) {
       runState.message = `before: copying files`;
       for (const [src, dest] of Object.entries(action.copy)) {
-        await fs.cp(src, path.join(workspaceDir, dest), {
+        await fs.cp(src as string, path.join(workspaceDir, dest as string), {
           recursive: true,
         });
       }
     } else if ("files" in action) {
       runState.message = `before: writing files`;
       for (const [dest, content] of Object.entries(action.files)) {
-        await fs.writeFile(path.join(workspaceDir, dest), content);
+        await fs.writeFile(
+          path.join(workspaceDir, dest as string),
+          content as string,
+        );
       }
     }
   }
@@ -344,6 +350,7 @@ async function runMatrixCommand(
 async function runAgent(
   workspaceDir: string,
   artifactsDir: string,
+  config: Config,
   test: TercaTest,
   matrix: ExpandedMatrix,
   logStream: NodeJS.WritableStream,
@@ -358,11 +365,16 @@ async function runAgent(
   const runner = new Runner();
   runState.message = `agent \`${agent}\` running...`;
 
+  const prompt = [config.preamble, test.prompt, config.postamble]
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
+
   // TODO: Create temporary files for rules and mcpServers
   const runnerOpts = {
     workspaceDir,
     artifactsDir,
-    prompt: test.prompt,
+    prompt,
     rulesFile: matrix.rules as string | undefined,
     mcpServers: matrix.mcpServers as any,
   };

@@ -92,9 +92,31 @@ export class GeminiAgentRunner implements AgentRunner {
           "gemini-output.json",
         );
         await fs.writeFile(outputFile, stdout);
+        let json;
         try {
-          const json = JSON.parse(stdout);
+          json = JSON.parse(stdout);
+        } catch (e: any) {
+          if (exitCode !== 0) {
+            const match = stdout.match(/{[\s\S]*}/);
+            if (match) {
+              try {
+                json = JSON.parse(match[0]);
+              } catch (e2) {
+                // ignore
+              }
+            }
+          }
+          if (!json) {
+            yield { output: stdout };
+            yield {
+              output: `
+Error parsing JSON output: ${e.message}
+`,
+            };
+          }
+        }
 
+        if (json) {
           if (json.response) {
             yield { output: json.response };
           }
@@ -133,15 +155,12 @@ Error: ${json.error.message}
 `,
             };
           }
-        } catch (e: any) {
-          // If stdout was not JSON, yield it as raw output.
-          yield { output: stdout };
-          yield {
-            output: `
-Error parsing JSON output: ${e.message}
-`,
-          };
         }
+      }
+
+      if (exitCode !== 0 && !stats) {
+        const telemetryFile = path.join(options.artifactsDir, "telemetry.log");
+        stats = await parseTelemetryLog(telemetryFile);
       }
 
       yield { done: true, exitCode, stats };
@@ -149,4 +168,81 @@ Error parsing JSON output: ${e.message}
       await fs.rm(geminiDir, { recursive: true, force: true });
     }
   }
+}
+
+async function parseTelemetryLog(
+  logPath: string,
+): Promise<AgentRunnerStats | undefined> {
+  let content: string;
+  try {
+    content = await fs.readFile(logPath, "utf-8");
+  } catch (e: any) {
+    if (e.code === "ENOENT") {
+      return undefined;
+    }
+    throw e;
+  }
+
+  const stats: AgentRunnerStats = {
+    requests: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+    durationSeconds: 0,
+  };
+
+  const lines = content.split("\n");
+  let firstHrTime: [number, number] | undefined;
+  let lastHrTime: [number, number] | undefined;
+
+  for (const line of lines) {
+    if (!line.trim()) {
+      continue;
+    }
+    try {
+      const obj = JSON.parse(line);
+      if (obj.hrTime) {
+        if (!firstHrTime) {
+          firstHrTime = obj.hrTime;
+        }
+        lastHrTime = obj.hrTime;
+      }
+
+      if (obj.attributes?.["event.name"] === "gemini_cli.api_response") {
+        stats.requests++;
+      }
+
+      if (obj.scopeMetrics) {
+        for (const scope of obj.scopeMetrics) {
+          for (const metric of scope.metrics) {
+            if (metric.descriptor.name === "gemini_cli.token.usage") {
+              for (const dataPoint of metric.dataPoints) {
+                if (dataPoint.attributes.type === "input") {
+                  stats.inputTokens = dataPoint.value;
+                } else if (dataPoint.attributes.type === "output") {
+                  stats.outputTokens = dataPoint.value;
+                } else if (dataPoint.attributes.type === "cache") {
+                  stats.cachedInputTokens = dataPoint.value;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore parsing errors for individual objects
+    }
+  }
+
+  if (firstHrTime && lastHrTime) {
+    const start = firstHrTime[0] + firstHrTime[1] / 1e9;
+    const end = lastHrTime[0] + lastHrTime[1] / 1e9;
+    stats.durationSeconds = end - start;
+  }
+
+  if (stats.requests > 0) {
+    return stats;
+  }
+
+  return undefined;
 }

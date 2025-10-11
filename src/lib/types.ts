@@ -69,21 +69,25 @@ export const TercaTestSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   prompt: z.string(),
+  workspaceDir: z.string().optional(),
   repetitions: z.number().optional(),
   before: z.array(TercaBeforeActionSchema).optional(),
   eval: z.array(TercaEvaluatorSchema).optional(),
 });
+
 export type TercaTest = z.infer<typeof TercaTestSchema>;
 
 export const TercaConfigSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
+  preamble: z.string().optional(),
+  postamble: z.string().optional(),
   workspaceDir: z.string().optional(),
   repetitions: z.number().optional(),
   concurrency: z.number().optional(),
-  matrix: z.array(MatrixEntrySchema),
   before: z.array(TercaBeforeActionSchema).optional(),
   tests: z.array(TercaTestSchema),
+  matrix: z.array(MatrixEntrySchema).optional(),
 });
 export type Config = z.infer<typeof TercaConfigSchema>;
 
