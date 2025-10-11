@@ -204,42 +204,53 @@ async function parseTelemetryLog(
   const lines = content.split("\n");
   let firstHrTime: [number, number] | undefined;
   let lastHrTime: [number, number] | undefined;
+  let inObject = false;
+  let currentObjectLines: string[] = [];
 
   for (const line of lines) {
-    if (!line.trim()) {
-      continue;
+    if (line.startsWith("{")) {
+      inObject = true;
+      currentObjectLines = [line];
+    } else if (inObject) {
+      currentObjectLines.push(line);
     }
-    try {
-      const obj = JSON.parse(line);
-      if (obj.hrTime) {
-        if (!firstHrTime) {
-          firstHrTime = obj.hrTime;
+
+    if (line.startsWith("}") && inObject) {
+      inObject = false;
+      try {
+        const obj = JSON.parse(currentObjectLines.join("\n"));
+        currentObjectLines = [];
+
+        if (obj.hrTime) {
+          if (!firstHrTime) {
+            firstHrTime = obj.hrTime;
+          }
+          lastHrTime = obj.hrTime;
         }
-        lastHrTime = obj.hrTime;
-      }
 
-      if (obj.attributes?.["event.name"] === "gemini_cli.api_response") {
-        stats.requests++;
-      }
+        if (obj.attributes?.["event.name"] === "gemini_cli.api_response") {
+          stats.requests++;
+        }
 
-      if (obj.attributes) {
-        for (const key in obj.attributes) {
-          if (key.endsWith("_token_count")) {
-            const val = obj.attributes[key];
-            if (typeof val === "number") {
-              if (key === "input_token_count") {
-                stats.inputTokens += val;
-              } else if (key === "output_token_count") {
-                stats.outputTokens += val;
-              } else if (key === "cached_content_token_count") {
-                stats.cachedInputTokens += val;
+        if (obj.attributes) {
+          for (const key in obj.attributes) {
+            if (key.endsWith("_token_count")) {
+              const val = obj.attributes[key];
+              if (typeof val === "number") {
+                if (key === "input_token_count") {
+                  stats.inputTokens += val;
+                } else if (key === "output_token_count") {
+                  stats.outputTokens += val;
+                } else if (key === "cached_content_token_count") {
+                  stats.cachedInputTokens += val;
+                }
               }
             }
           }
         }
+      } catch (e: any) {
+        debug(`Error parsing telemetry object: ${e.message}\n`);
       }
-    } catch (e: any) {
-      debug(`Error parsing telemetry line: ${e.message}\n`);
     }
   }
 
