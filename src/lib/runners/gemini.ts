@@ -14,6 +14,7 @@ export class GeminiAgentRunner implements AgentRunner {
     const geminiDir = path.join(options.workspaceDir, ".gemini");
     const settingsFile = path.join(geminiDir, "settings.json");
     const args = ["-p", options.prompt, "--yolo", "--output-format", "json"];
+    const logger = options.logger || process.stderr;
 
     try {
       await fs.mkdir(geminiDir, { recursive: true });
@@ -166,7 +167,9 @@ Error: ${json.error.message}
 
       if (exitCode !== 0 && !stats) {
         const telemetryFile = path.join(options.artifactsDir, "telemetry.log");
-        stats = await parseTelemetryLog(telemetryFile);
+        stats = await parseTelemetryLog(telemetryFile, (msg) =>
+          logger.write(msg),
+        );
       }
 
       yield { done: true, exitCode, stats };
@@ -178,6 +181,7 @@ Error: ${json.error.message}
 
 async function parseTelemetryLog(
   logPath: string,
+  debug: (message: string) => void,
 ): Promise<AgentRunnerStats | undefined> {
   let content: string;
   try {
@@ -218,25 +222,24 @@ async function parseTelemetryLog(
         stats.requests++;
       }
 
-      if (obj.scopeMetrics) {
-        for (const scope of obj.scopeMetrics) {
-          for (const metric of scope.metrics) {
-            if (metric.descriptor.name === "gemini_cli.token.usage") {
-              for (const dataPoint of metric.dataPoints) {
-                if (dataPoint.attributes.type === "input") {
-                  stats.inputTokens = dataPoint.value;
-                } else if (dataPoint.attributes.type === "output") {
-                  stats.outputTokens = dataPoint.value;
-                } else if (dataPoint.attributes.type === "cache") {
-                  stats.cachedInputTokens = dataPoint.value;
-                }
+      if (obj.attributes) {
+        for (const key in obj.attributes) {
+          if (key.endsWith("_token_count")) {
+            const val = obj.attributes[key];
+            if (typeof val === "number") {
+              if (key === "input_token_count") {
+                stats.inputTokens += val;
+              } else if (key === "output_token_count") {
+                stats.outputTokens += val;
+              } else if (key === "cached_content_token_count") {
+                stats.cachedInputTokens += val;
               }
             }
           }
         }
       }
-    } catch (e) {
-      // Ignore parsing errors for individual objects
+    } catch (e: any) {
+      debug(`Error parsing telemetry line: ${e.message}\n`);
     }
   }
 
@@ -246,7 +249,12 @@ async function parseTelemetryLog(
     stats.durationSeconds = end - start;
   }
 
-  if (stats.requests > 0) {
+  if (
+    stats.requests > 0 ||
+    stats.inputTokens > 0 ||
+    stats.outputTokens > 0 ||
+    stats.cachedInputTokens > 0
+  ) {
     return stats;
   }
 

@@ -105,6 +105,7 @@ export interface AgentRunnerOptions {
   mcpServers?: McpServersConfig;
   config?: any;
   signal?: AbortSignal;
+  logger?: NodeJS.WritableStream;
 }
 
 export interface AgentRunnerStats {

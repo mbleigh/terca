@@ -387,6 +387,7 @@ async function runAgent(
     rulesFile: matrix.rules as string | undefined,
     mcpServers: matrix.mcpServers as any,
     signal: controller.signal,
+    logger: logStream,
   };
 
   let stats: AgentRunnerStats | undefined;
