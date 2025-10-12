@@ -48,7 +48,15 @@ export const TercaBeforeActionSchema = z.union([
 export type TercaBeforeAction = z.infer<typeof TercaBeforeActionSchema>;
 
 export const TercaEvaluatorActionsSchema = z.object({
-  commandSuccess: z.string().optional(),
+  commandSuccess: z
+    .union([
+      z.string(),
+      z.object({
+        command: z.string(),
+        outputContains: z.string(),
+      }),
+    ])
+    .optional(),
   fileExists: z.union([z.string(), z.array(z.string())]).optional(),
 });
 export type TercaEvaluatorActions = z.infer<typeof TercaEvaluatorActionsSchema>;

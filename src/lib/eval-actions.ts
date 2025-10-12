@@ -33,15 +33,25 @@ export const commandSuccess: EvalAction<"commandSuccess"> = async (
       message: "No command provided.",
     };
   }
+
+  const command = typeof payload === "string" ? payload : payload.command;
+  const outputContains =
+    typeof payload === "string" ? undefined : payload.outputContains;
+
   logStream.write(
     `
---- Running evaluation command: ${payload} ---
+--- Running evaluation command: ${command} ---
 `,
   );
-  const proc = spawn(payload, {
+  const proc = spawn(command, {
     cwd: workspaceDir,
     stdio: "pipe",
     shell: true,
+  });
+
+  let stdout = "";
+  proc.stdout?.on("data", (data) => {
+    stdout += data.toString();
   });
 
   proc.stdout?.pipe(logStream, { end: false });
@@ -50,15 +60,28 @@ export const commandSuccess: EvalAction<"commandSuccess"> = async (
   const exitCode = await new Promise<number>((resolve) => {
     proc.on("close", resolve);
   });
-  const score = exitCode === 0 ? 1.0 : 0.0;
+
+  let score = exitCode === 0 ? 1.0 : 0.0;
+  let message = `Command "${command}" exited with code ${exitCode}.`;
+
+  if (score > 0 && outputContains) {
+    if (stdout.includes(outputContains)) {
+      score = 1.0;
+      message += ` Output contains "${outputContains}".`;
+    } else {
+      score = 0.0;
+      message += ` Output does not contain "${outputContains}".`;
+    }
+  }
+
   logStream.write(
     `
---- End of evaluation command: ${payload} (Exit code: ${exitCode}) ---
+--- End of evaluation command: ${command} (Exit code: ${exitCode}) ---
 `,
   );
   return {
     score,
-    message: `Command "${payload}" exited with code ${exitCode}.`,
+    message,
   };
 };
 
