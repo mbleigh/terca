@@ -35,112 +35,98 @@ export function printAgentOutput(output: string) {
 export function printResults(results: { runs: any[] }) {
   printHeader("Terca Run Summary");
 
-  let overallPassed = 0;
-  let overallNeutral = 0;
-  let overallFailed = 0;
-
-  const runsByExperiment = results.runs.reduce(
+  const runsByEnv = results.runs.reduce(
     (acc: Record<string, any[]>, run: any) => {
-      const experimentName = run.experiment || "default";
-      if (!acc[experimentName]) {
-        acc[experimentName] = [];
+      const envName = run.environment || "default";
+      if (!acc[envName]) {
+        acc[envName] = [];
       }
-      acc[experimentName].push(run);
+      acc[envName].push(run);
       return acc;
     },
-    {} as Record<string, any[]>,
+    {},
   );
 
-  for (const experimentName in runsByExperiment) {
-    console.log(
-      c.bold(`
-=== Experiment: ${experimentName} ===`),
-    );
-
-    const runsByEnvironment = runsByExperiment[experimentName].reduce(
-      (acc, run) => {
-        const environmentName = run.environment || "default";
-        if (!acc[environmentName]) {
-          acc[environmentName] = [];
+  for (const envName in runsByEnv) {
+    const runsByExperiment = runsByEnv[envName].reduce(
+      (acc: Record<string, any[]>, run: any) => {
+        const expName = run.experiment || "default";
+        if (!acc[expName]) {
+          acc[expName] = [];
         }
-        acc[environmentName].push(run);
+        acc[expName].push(run);
         return acc;
       },
-      {} as Record<string, any[]>,
+      {},
     );
 
-    for (const environmentName in runsByEnvironment) {
-      console.log(
-        c.bold(`
-  --- Environment: ${environmentName} ---`),
+    for (const expName in runsByExperiment) {
+      console.log(c.bold(`\n=== ${envName}: ${expName} ===`));
+
+      const runsByTest = runsByExperiment[expName].reduce(
+        (acc: Record<string, any[]>, run: any) => {
+          const testName = run.test || "default";
+          if (!acc[testName]) {
+            acc[testName] = [];
+          }
+          acc[testName].push(run);
+          return acc;
+        },
+        {},
       );
 
-      const tests = runsByEnvironment[environmentName];
+      for (const testName in runsByTest) {
+        const runs = runsByTest[testName];
+        const passedRuns = runs.filter(
+          (run) =>
+            run.results &&
+            Object.values(run.results).every((score) => (score as number) > 0),
+        );
+        const passRate = (passedRuns.length / runs.length) * 100;
 
-      for (const test of tests) {
-        let passed = 0;
-        let neutral = 0;
-        let failed = 0;
+        const totalDuration = runs.reduce(
+          (acc, run) => acc + (run.stats?.durationSeconds || 0),
+          0,
+        );
+        const avgDuration = totalDuration / runs.length;
 
-        for (const score of Object.values(test.results || {})) {
-          const numericScore = score as number;
-          if (numericScore === 1.0) passed++;
-          else if (numericScore > 0.0 && numericScore < 1.0) neutral++;
-          else failed++;
+        const totalInputTokens = runs.reduce(
+          (acc, run) => acc + (run.stats?.inputTokens || 0),
+          0,
+        );
+        const avgInputTokens = totalInputTokens / runs.length;
+
+        const totalOutputTokens = runs.reduce(
+          (acc, run) => acc + (run.stats?.outputTokens || 0),
+          0,
+        );
+        const avgOutputTokens = totalOutputTokens / runs.length;
+
+        const totalCachedInputTokens = runs.reduce(
+          (acc, run) => acc + (run.stats?.cachedInputTokens || 0),
+          0,
+        );
+        const avgCachedInputTokens = totalCachedInputTokens / runs.length;
+
+        let summaryLine = `- ${c.bold(testName)}: `;
+        if (passRate > 80) {
+          summaryLine += c.green("✅ PASS");
+        } else if (passRate > 50) {
+          summaryLine += c.yellow("⚠️ WARN");
+        } else {
+          summaryLine += c.red("❌ FAIL");
         }
 
-        overallPassed += passed;
-        overallNeutral += neutral;
-        overallFailed += failed;
+        summaryLine += ` (${passedRuns.length}/${runs.length}), `;
+        summaryLine += `avg ${avgDuration.toFixed(1)}s, `;
+        summaryLine += `token avg: ${(avgInputTokens / 1000).toFixed(
+          0,
+        )}K in / ${(avgOutputTokens / 1000).toFixed(0)}K out / ${(
+          avgCachedInputTokens / 1000
+        ).toFixed(0)}K cached`;
 
-        const summaryParts = [];
-        if (passed > 0) summaryParts.push(c.green(`${passed} passed`));
-        if (neutral > 0) summaryParts.push(c.yellow(`${neutral} neutral`));
-        if (failed > 0) summaryParts.push(c.red(`${failed} failed`));
-
-        if (test.stats?.timedOut) {
-          summaryParts.push(c.red("(timed out)"));
-        }
-
-        console.log(`
-    --- ${test.test} (${summaryParts.join(", ")}) ---`);
-
-        if (test.stats) {
-          console.log(
-            c.gray(
-              `      (duration: ${test.stats.durationSeconds.toFixed(
-                2,
-              )}s, tokens: ${test.stats.inputTokens} in / ${
-                test.stats.outputTokens
-              } out)`,
-            ),
-          );
-        }
-
-        for (const [evalName, score] of Object.entries(test.results || {})) {
-          const numericScore = score as number;
-          if (numericScore === 1.0) {
-            console.log(`      ${c.green("✔︎")} ${evalName}`);
-          } else if (numericScore > 0.0 && numericScore < 1.0) {
-            console.log(`      ${c.yellow("~")} ${evalName} (${numericScore})`);
-          } else {
-            console.log(`      ${c.red("✖︎")} ${evalName}`);
-          }
-        }
+        console.log(summaryLine);
       }
     }
   }
-
-  const overallSummaryParts = [];
-  if (overallPassed > 0)
-    overallSummaryParts.push(c.green(`${overallPassed} passed`));
-  if (overallNeutral > 0)
-    overallSummaryParts.push(c.yellow(`${overallNeutral} neutral`));
-  if (overallFailed > 0)
-    overallSummaryParts.push(c.red(`${overallFailed} failed`));
-
-  console.log(
-    c.bold(`
-OVERALL: ${overallSummaryParts.join(", ")}`),
-  );
 }

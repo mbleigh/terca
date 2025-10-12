@@ -18,6 +18,7 @@ import { spawn } from "child_process";
 import { printHeader, printResults } from "./ui.js";
 import * as evalActions from "./eval-actions.js";
 import logUpdate from "log-update";
+import { green, red, gray } from "./colors.js";
 
 const AGENT_RUNNERS: Record<string, new () => AgentRunner> = {
   gemini: GeminiAgentRunner,
@@ -34,6 +35,7 @@ interface RunDisplayState {
   logFile?: string;
   results?: any;
   error?: any;
+  stats?: AgentRunnerStats;
 }
 
 export async function runTests(options: {
@@ -86,16 +88,38 @@ export async function runTests(options: {
     for (const state of runStates) {
       let line = `${state.id.toString().padStart(3, "0")} ${state.name}: `;
       if (state.status === "complete") {
-        const passed = Object.values(state.results || {}).filter(
-          (r) => (r as number) > 0,
-        ).length;
-        const total = Object.values(state.results || {}).length;
-        line += `complete\n`;
-        if (state.logFile) {
-          line += `  - log: ${state.logFile}\n`;
+        const evalResults = state.results || {};
+        const failedEvals = Object.entries(evalResults).filter(
+          ([, score]) => (score as number) <= 0,
+        );
+        const passed = failedEvals.length === 0;
+
+        if (passed) {
+          line += green("✅ PASS");
+        } else {
+          line += red("❌ FAIL");
         }
-        if (total > 0) {
-          line += `  - results: ${passed}/${total} passed\n`;
+
+        const statsParts = [];
+        if (state.stats?.durationSeconds) {
+          statsParts.push(
+            `latency: ${state.stats.durationSeconds.toFixed(2)}s`,
+          );
+        }
+        const totalTokens =
+          (state.stats?.inputTokens || 0) + (state.stats?.outputTokens || 0);
+        if (totalTokens > 0) {
+          statsParts.push(`tokens: ${totalTokens}`);
+        }
+        if (statsParts.length > 0) {
+          line += gray(` (${statsParts.join(", ")})`);
+        }
+        line += "\n";
+
+        if (!passed) {
+          for (const [name] of failedEvals) {
+            line += `  - ${red("FAIL")}: ${name}\n`;
+          }
         }
       } else if (state.status === "error") {
         line += `error: ${state.error?.message}\n`;
@@ -143,6 +167,7 @@ export async function runTests(options: {
         runState.status = "complete";
         runState.message = "complete";
         runState.results = evalResult;
+        runState.stats = stats;
 
         results.runs.push({
           id: run.id,
