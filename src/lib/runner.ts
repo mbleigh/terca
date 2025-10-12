@@ -9,7 +9,9 @@ import {
   Config,
   ExpandedMatrix,
   TercaTest,
+  RunDisplayState,
 } from "./types.js";
+import { runBeforeActions } from "./before-actions.js";
 import path from "path";
 import os from "os";
 import fs from "fs/promises";
@@ -26,17 +28,6 @@ const AGENT_RUNNERS: Record<string, new () => AgentRunner> = {
   codex: CodexAgentRunner,
   opencode: OpencodeAgentRunner,
 };
-
-interface RunDisplayState {
-  id: number;
-  name: string;
-  status: "pending" | "running" | "complete" | "error";
-  message: string;
-  logFile?: string;
-  results?: any;
-  error?: any;
-  stats?: AgentRunnerStats;
-}
 
 export async function runTests(options: {
   repetitions?: number;
@@ -314,52 +305,6 @@ async function setupWorkspace(
   }
   await fs.cp(sourceDir, workspaceDir, { recursive: true });
   return workspaceDir;
-}
-
-async function runBeforeActions(
-  workspaceDir: string,
-  config: Config,
-  test: TercaTest,
-  logStream: NodeJS.WritableStream,
-  runState: RunDisplayState,
-) {
-  const actions = [...(config.before || []), ...(test.before || [])];
-  for (const action of actions) {
-    if ("command" in action) {
-      runState.message = `before: running \`${action.command}\``;
-      logStream.write(`
---- Running before command: ${action.command} ---
-`);
-      const [cmd, ...args] = action.command.split(" ");
-      const proc = spawn(cmd, args, {
-        cwd: workspaceDir,
-        stdio: "pipe",
-      });
-      proc.stdout?.pipe(logStream, { end: false });
-      proc.stderr?.pipe(logStream, { end: false });
-      await new Promise((resolve) => {
-        proc.on("close", resolve);
-      });
-      logStream.write(`
---- End of before command: ${action.command} ---
-`);
-    } else if ("copy" in action) {
-      runState.message = `before: copying files`;
-      for (const [src, dest] of Object.entries(action.copy)) {
-        await fs.cp(src as string, path.join(workspaceDir, dest as string), {
-          recursive: true,
-        });
-      }
-    } else if ("files" in action) {
-      runState.message = `before: writing files`;
-      for (const [dest, content] of Object.entries(action.files)) {
-        await fs.writeFile(
-          path.join(workspaceDir, dest as string),
-          content as string,
-        );
-      }
-    }
-  }
 }
 
 async function runVariantCommand(

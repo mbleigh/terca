@@ -136,3 +136,14 @@ export interface AgentRunnerProgress {
 export interface AgentRunner {
   run(options: AgentRunnerOptions): AsyncIterable<AgentRunnerProgress>;
 }
+
+export interface RunDisplayState {
+  id: number;
+  name: string;
+  status: "pending" | "running" | "complete" | "error";
+  message: string;
+  logFile?: string;
+  results?: any;
+  error?: any;
+  stats?: AgentRunnerStats;
+}
