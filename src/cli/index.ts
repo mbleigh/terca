@@ -7,6 +7,7 @@ const options: {
   repetitions?: number;
   concurrency?: number;
   signal?: AbortSignal;
+  only?: string[];
 } = {};
 
 for (let i = 0; i < args.length; i++) {
@@ -16,6 +17,9 @@ for (let i = 0; i < args.length; i++) {
     i++;
   } else if (arg === "-c" || arg === "--concurrency") {
     options.concurrency = parseInt(args[i + 1], 10);
+    i++;
+  } else if (arg === "--only") {
+    options.only = args[i + 1].split(",");
     i++;
   }
 }

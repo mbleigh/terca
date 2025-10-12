@@ -33,6 +33,7 @@ export async function runTests(options: {
   repetitions?: number;
   concurrency?: number;
   signal?: AbortSignal;
+  only?: string[];
 }) {
   const config = await loadConfig();
   const variants = expandEnvironmentsAndExperiments(config);
@@ -45,7 +46,11 @@ export async function runTests(options: {
   let runId = 0;
   const suiteRepetitions = options.repetitions || config.repetitions || 1;
 
-  for (const test of config.tests) {
+  const testsToRun = options.only
+    ? config.tests.filter((test) => options.only?.includes(test.name))
+    : config.tests;
+
+  for (const test of testsToRun) {
     const testRepetitions = test.repetitions || 1;
     const totalRepetitions = suiteRepetitions * testRepetitions;
     for (const variant of variants) {

@@ -38,10 +38,10 @@ export const commandSuccess: EvalAction<"commandSuccess"> = async (
 --- Running evaluation command: ${payload} ---
 `,
   );
-  const [cmd, ...args] = payload.split(" ");
-  const proc = spawn(cmd, args, {
+  const proc = spawn(payload, {
     cwd: workspaceDir,
     stdio: "pipe",
+    shell: true,
   });
 
   proc.stdout?.pipe(logStream, { end: false });
