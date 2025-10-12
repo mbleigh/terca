@@ -1,95 +1,83 @@
-import { describe, it, expect } from 'vitest';
-import { expandMatrix } from './config.js';
-import { MatrixEntry } from './types.js';
+import { describe, it, expect } from "vitest";
+import { expandEnvironmentsAndExperiments } from "./config.js";
+import { Config } from "./types.js";
 
-describe('expandMatrix', () => {
+describe("expandEnvironmentsAndExperiments", () => {
   const testCases = [
     {
-      desc: 'should return an array with an empty object for an empty matrix',
-      input: [],
-      expect: [{}],
-    },
-    {
-      desc: 'should handle a single entry with a single value',
-      input: [{ agent: 'gemini' }],
-      expect: [{ agent: 'gemini' }],
-    },
-    {
-      desc: 'should handle a single entry with an array of values',
-      input: [{ agent: ['gemini', 'claude'] }],
-      expect: [{ agent: 'gemini' }, { agent: 'claude' }],
-    },
-    {
-      desc: 'should handle two entries with single values',
-      input: [{ agent: 'gemini' }, { rulesFile: 'a.txt' }],
-      expect: [{ agent: 'gemini', rulesFile: 'a.txt' }],
-    },
-    {
-      desc: 'should handle two entries, one with an array',
-      input: [{ agent: ['gemini', 'claude'] }, { rulesFile: 'a.txt' }],
+      desc: "should handle no environments or experiments",
+      input: {
+        name: "test",
+        tests: [],
+      },
       expect: [
-        { agent: 'gemini', rulesFile: 'a.txt' },
-        { agent: 'claude', rulesFile: 'a.txt' },
+        { name: "default", environment: "default", experiment: "default" },
       ],
     },
     {
-      desc: 'should handle two entries, both with arrays',
-      input: [{ agent: ['gemini', 'claude'] }, { rulesFile: ['a.txt', 'b.txt'] }],
+      desc: "should handle environments only",
+      input: {
+        name: "test",
+        tests: [],
+        environments: [{ name: "gemini" }, { name: "claude" }],
+      },
       expect: [
-        { agent: 'gemini', rulesFile: 'a.txt' },
-        { agent: 'gemini', rulesFile: 'b.txt' },
-        { agent: 'claude', rulesFile: 'a.txt' },
-        { agent: 'claude', rulesFile: 'b.txt' },
+        { name: "gemini", environment: "gemini", experiment: "default" },
+        { name: "claude", environment: "claude", experiment: "default" },
       ],
     },
     {
-      desc: 'should handle a single entry with multiple array-valued keys',
-      input: [
-        {
-          agent: ['gemini', 'claude'],
-          rulesFile: ['a.txt', 'b.txt'],
-        },
-      ],
+      desc: "should handle experiments only",
+      input: {
+        name: "test",
+        tests: [],
+        experiments: [{ name: "control" }, { name: "test" }],
+      },
       expect: [
-        { agent: 'gemini', rulesFile: 'a.txt' },
-        { agent: 'gemini', rulesFile: 'b.txt' },
-        { agent: 'claude', rulesFile: 'a.txt' },
-        { agent: 'claude', rulesFile: 'b.txt' },
+        { name: "control", environment: "default", experiment: "control" },
+        { name: "test", environment: "default", experiment: "test" },
       ],
     },
     {
-      desc: 'should handle multiple entries with multiple array-valued keys',
-      input: [
-        { agent: ['gemini', 'claude'] },
-        {
-          rulesFile: ['a.txt', 'b.txt'],
-          mcpServers: [null, { test: { command: 'test-server' } }],
-        },
-      ],
+      desc: "should create a cartesian product of environments and experiments",
+      input: {
+        name: "test",
+        tests: [],
+        environments: [{ name: "gemini" }, { name: "claude" }],
+        experiments: [{ name: "control" }, { name: "test" }],
+      },
       expect: [
-        { agent: 'gemini', rulesFile: 'a.txt', mcpServers: null },
+        { name: "control", environment: "gemini", experiment: "control" },
+        { name: "test", environment: "gemini", experiment: "test" },
+        { name: "control", environment: "claude", experiment: "control" },
+        { name: "test", environment: "claude", experiment: "test" },
+      ],
+    },
+    {
+      desc: "should merge properties, with experiment overriding environment",
+      input: {
+        name: "test",
+        tests: [],
+        environments: [{ name: "gemini", agent: "gemini" }],
+        experiments: [
+          { name: "control", command: "cmd1" },
+          { name: "test", agent: "claude", command: "cmd2" },
+        ],
+      },
+      expect: [
         {
-          agent: 'gemini',
-          rulesFile: 'a.txt',
-          mcpServers: { test: { command: 'test-server' } },
+          name: "control",
+          agent: "gemini",
+          command: "cmd1",
+          environment: "gemini",
+          experiment: "control",
         },
-        { agent: 'gemini', rulesFile: 'b.txt', mcpServers: null },
         {
-          agent: 'gemini',
-          rulesFile: 'b.txt',
-          mcpServers: { test: { command: 'test-server' } },
-        },
-        { agent: 'claude', rulesFile: 'a.txt', mcpServers: null },
-        {
-          agent: 'claude',
-          rulesFile: 'a.txt',
-          mcpServers: { test: { command: 'test-server' } },
-        },
-        { agent: 'claude', rulesFile: 'b.txt', mcpServers: null },
-        {
-          agent: 'claude',
-          rulesFile: 'b.txt',
-          mcpServers: { test: { command: 'test-server' } },
+          name: "test",
+          agent: "claude",
+          command: "cmd2",
+          environment: "gemini",
+          experiment: "test",
         },
       ],
     },
@@ -97,7 +85,7 @@ describe('expandMatrix', () => {
 
   for (const { desc, input, expect: expected } of testCases) {
     it(desc, () => {
-      const result = expandMatrix(input as MatrixEntry[]);
+      const result = expandEnvironmentsAndExperiments(input as Config);
       expect(result.length).toBe(expected.length);
       expect(result).toEqual(expect.arrayContaining(expected));
     });

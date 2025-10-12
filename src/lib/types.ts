@@ -22,22 +22,23 @@ export const McpServersConfigSchema = z.record(
 );
 export type McpServersConfig = z.infer<typeof McpServersConfigSchema>;
 
-export const MatrixEntrySchema = z.object({
-  agent: z
-    .union([SupportedAgentSchema, z.array(SupportedAgentSchema)])
-    .optional(),
-  rules: z.union([z.string(), z.array(z.string())]).optional(),
-  mcpServers: z
-    .union([
-      McpServersConfigSchema,
-      z.array(z.union([McpServersConfigSchema, z.null()])),
-    ])
-    .optional(),
-  command: z
-    .union([z.string(), z.array(z.union([z.string(), z.null()]))])
-    .optional(),
+export const EnvironmentSchema = z.object({
+  name: z.string(),
+  agent: SupportedAgentSchema.optional(),
+  rules: z.string().optional(),
+  mcpServers: McpServersConfigSchema.optional(),
+  command: z.string().optional(),
 });
-export type MatrixEntry = z.infer<typeof MatrixEntrySchema>;
+export type Environment = z.infer<typeof EnvironmentSchema>;
+
+export const ExperimentSchema = z.object({
+  name: z.string(),
+  agent: SupportedAgentSchema.optional(),
+  rules: z.string().optional(),
+  mcpServers: McpServersConfigSchema.optional(),
+  command: z.string().optional(),
+});
+export type Experiment = z.infer<typeof ExperimentSchema>;
 
 export const TercaBeforeActionSchema = z.union([
   z.object({ copy: z.record(z.string(), z.string()) }),
@@ -89,7 +90,8 @@ export const TercaConfigSchema = z.object({
   timeoutSeconds: z.number().optional(),
   before: z.array(TercaBeforeActionSchema).optional(),
   tests: z.array(TercaTestSchema),
-  matrix: z.array(MatrixEntrySchema).optional(),
+  environments: z.array(EnvironmentSchema).optional(),
+  experiments: z.array(ExperimentSchema).optional(),
 });
 export type Config = z.infer<typeof TercaConfigSchema>;
 

@@ -32,39 +32,6 @@ export function printAgentOutput(output: string) {
   process.stdout.write(output);
 }
 
-export function printEvalSummary(
-  testName: string,
-  matrix: ExpandedMatrix,
-  results: any,
-  stats: AgentRunnerStats | undefined,
-) {
-  const matrixId = Object.entries(matrix)
-    .map(([k, v]) => `${k}=${v}`)
-    .join(", ");
-  console.log(
-    c.bold(`
---- Evaluation Summary for ${testName} (${matrixId}) ---
-`),
-  );
-  for (const [evalName, result] of Object.entries(results)) {
-    const icon = result === 1.0 ? c.green("✔︎") : c.red("✖︎");
-    const label = result === 1.0 ? "Pass" : "Fail";
-    console.log(`  ${icon} ${evalName}: ${label}`);
-  }
-  if (stats) {
-    console.log(
-      c.bold(`
-  Agent Stats:
-`),
-    );
-    console.log(`    Duration: ${stats.durationSeconds.toFixed(2)}s`);
-    console.log(`    Requests: ${stats.requests}`);
-    console.log(
-      `    Tokens: ${stats.inputTokens} (in) / ${stats.outputTokens} (out)`,
-    );
-  }
-}
-
 export function printResults(results: { runs: any[] }) {
   printHeader("Terca Run Summary");
 
@@ -72,79 +39,93 @@ export function printResults(results: { runs: any[] }) {
   let overallNeutral = 0;
   let overallFailed = 0;
 
-  const runsByMatrix = results.runs.reduce(
-    (acc, run) => {
-      const matrixKey = JSON.stringify(run.matrix);
-      if (!acc[matrixKey]) {
-        acc[matrixKey] = {
-          matrix: run.matrix,
-          tests: [],
-        };
+  const runsByExperiment = results.runs.reduce(
+    (acc: Record<string, any[]>, run: any) => {
+      const experimentName = run.experiment || "default";
+      if (!acc[experimentName]) {
+        acc[experimentName] = [];
       }
-      acc[matrixKey].tests.push(run);
+      acc[experimentName].push(run);
       return acc;
     },
-    {} as Record<string, { matrix: any; tests: any[] }>,
+    {} as Record<string, any[]>,
   );
 
-  let matrixId = 0;
-  for (const matrixKey in runsByMatrix) {
-    matrixId++;
-    const { matrix, tests } = runsByMatrix[matrixKey];
+  for (const experimentName in runsByExperiment) {
     console.log(
       c.bold(`
-=== Matrix Config #${matrixId.toString().padStart(2, "0")} ===`),
+=== Experiment: ${experimentName} ===`),
     );
-    console.log(stringify(matrix));
 
-    for (const test of tests) {
-      let passed = 0;
-      let neutral = 0;
-      let failed = 0;
+    const runsByEnvironment = runsByExperiment[experimentName].reduce(
+      (acc, run) => {
+        const environmentName = run.environment || "default";
+        if (!acc[environmentName]) {
+          acc[environmentName] = [];
+        }
+        acc[environmentName].push(run);
+        return acc;
+      },
+      {} as Record<string, any[]>,
+    );
 
-      for (const score of Object.values(test.results)) {
-        const numericScore = score as number;
-        if (numericScore === 1.0) passed++;
-        else if (numericScore > 0.0 && numericScore < 1.0) neutral++;
-        else failed++;
-      }
+    for (const environmentName in runsByEnvironment) {
+      console.log(
+        c.bold(`
+  --- Environment: ${environmentName} ---`),
+      );
 
-      overallPassed += passed;
-      overallNeutral += neutral;
-      overallFailed += failed;
+      const tests = runsByEnvironment[environmentName];
 
-      const summaryParts = [];
-      if (passed > 0) summaryParts.push(c.green(`${passed} passed`));
-      if (neutral > 0) summaryParts.push(c.yellow(`${neutral} neutral`));
-      if (failed > 0) summaryParts.push(c.red(`${failed} failed`));
+      for (const test of tests) {
+        let passed = 0;
+        let neutral = 0;
+        let failed = 0;
 
-      if (test.stats?.timedOut) {
-        summaryParts.push(c.red("(timed out)"));
-      }
+        for (const score of Object.values(test.results || {})) {
+          const numericScore = score as number;
+          if (numericScore === 1.0) passed++;
+          else if (numericScore > 0.0 && numericScore < 1.0) neutral++;
+          else failed++;
+        }
 
-      console.log(`
---- ${test.test} (${summaryParts.join(", ")}) ---`);
+        overallPassed += passed;
+        overallNeutral += neutral;
+        overallFailed += failed;
 
-      if (test.stats) {
-        console.log(
-          c.gray(
-            `  (duration: ${test.stats.durationSeconds.toFixed(
-              2,
-            )}s, tokens: ${test.stats.inputTokens} in / ${
-              test.stats.outputTokens
-            } out)`,
-          ),
-        );
-      }
+        const summaryParts = [];
+        if (passed > 0) summaryParts.push(c.green(`${passed} passed`));
+        if (neutral > 0) summaryParts.push(c.yellow(`${neutral} neutral`));
+        if (failed > 0) summaryParts.push(c.red(`${failed} failed`));
 
-      for (const [evalName, score] of Object.entries(test.results)) {
-        const numericScore = score as number;
-        if (numericScore === 1.0) {
-          console.log(`  ${c.green("✔︎")} ${evalName}`);
-        } else if (numericScore > 0.0 && numericScore < 1.0) {
-          console.log(`  ${c.yellow("~")} ${evalName} (${numericScore})`);
-        } else {
-          console.log(`  ${c.red("✖︎")} ${evalName}`);
+        if (test.stats?.timedOut) {
+          summaryParts.push(c.red("(timed out)"));
+        }
+
+        console.log(`
+    --- ${test.test} (${summaryParts.join(", ")}) ---`);
+
+        if (test.stats) {
+          console.log(
+            c.gray(
+              `      (duration: ${test.stats.durationSeconds.toFixed(
+                2,
+              )}s, tokens: ${test.stats.inputTokens} in / ${
+                test.stats.outputTokens
+              } out)`,
+            ),
+          );
+        }
+
+        for (const [evalName, score] of Object.entries(test.results || {})) {
+          const numericScore = score as number;
+          if (numericScore === 1.0) {
+            console.log(`      ${c.green("✔︎")} ${evalName}`);
+          } else if (numericScore > 0.0 && numericScore < 1.0) {
+            console.log(`      ${c.yellow("~")} ${evalName} (${numericScore})`);
+          } else {
+            console.log(`      ${c.red("✖︎")} ${evalName}`);
+          }
         }
       }
     }

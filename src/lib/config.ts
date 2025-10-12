@@ -1,6 +1,6 @@
 import fs from "fs";
 import yaml from "yaml";
-import { TercaConfigSchema, Config, MatrixEntry } from "./types.js";
+import { TercaConfigSchema, Config, Environment, Experiment } from "./types.js";
 
 export function loadConfig(file: string = "terca.yaml"): Config {
   const content = fs.readFileSync(file, "utf-8");
@@ -8,63 +8,35 @@ export function loadConfig(file: string = "terca.yaml"): Config {
   return TercaConfigSchema.parse(data);
 }
 
-export function expandMatrix(matrix: MatrixEntry[]): Record<string, any>[] {
-  if (!matrix || matrix.length === 0) {
-    return [{}];
+export function expandEnvironmentsAndExperiments(
+  config: Config,
+): Record<string, any>[] {
+  const environments = config.environments || [];
+  if (environments.length === 0) {
+    environments.push({ name: "default" });
+  }
+  const experiments = config.experiments || [];
+  if (experiments.length === 0) {
+    experiments.push({ name: "default" });
   }
 
-  let results: Record<string, any>[] = [{}];
+  let results: Record<string, any>[] = [];
 
-  for (const entry of matrix) {
-    const newResults: Record<string, any>[] = [];
-    const keys = (Object.keys(entry) as (keyof MatrixEntry)[]).sort();
-
-    // Get all possible values for each key in the current entry
-    const valueSets: Record<string, any[]> = {};
-    for (const key of keys) {
-      const value = entry[key];
-      if (Array.isArray(value)) {
-        valueSets[key] = value;
-      } else {
-        valueSets[key] = [value];
-      }
-    }
-
-    // Generate Cartesian product of the value sets
-    const product = cartesianProduct(valueSets);
-
-    for (const result of results) {
-      for (const p of product) {
-        newResults.push({ ...result, ...p });
-      }
-    }
-    results = newResults;
-  }
-
-  return results;
-}
-
-function cartesianProduct(sets: Record<string, any[]>) {
-  const keys = Object.keys(sets).sort();
-  if (keys.length === 0) {
-    return [{}];
-  }
-
-  const results: Record<string, any>[] = [];
-  const firstKey = keys[0];
-  const firstSet = sets[firstKey];
-  const remainingSets = { ...sets };
-  delete remainingSets[firstKey];
-
-  const remainingProduct = cartesianProduct(remainingSets);
-
-  for (const value of firstSet) {
-    for (const p of remainingProduct) {
-      const newProduct = { ...p };
-      if (value !== undefined) {
-        newProduct[firstKey] = value;
-      }
-      results.push(newProduct);
+  for (const environment of environments) {
+    for (const experiment of experiments) {
+      const name =
+        experiment.name !== "default"
+          ? experiment.name
+          : environment.name !== "default"
+            ? environment.name
+            : "default";
+      results.push({
+        ...environment,
+        ...experiment,
+        name,
+        environment: environment.name,
+        experiment: experiment.name,
+      });
     }
   }
 

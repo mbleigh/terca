@@ -1,4 +1,4 @@
-import { expandMatrix, loadConfig } from "./config.js";
+import { expandEnvironmentsAndExperiments, loadConfig } from "./config.js";
 import { GeminiAgentRunner } from "./runners/gemini.js";
 import { ClaudeAgentRunner } from "./runners/claude.js";
 import { CodexAgentRunner } from "./runners/codex.js";
@@ -41,7 +41,7 @@ export async function runTests(options: {
   concurrency?: number;
 }) {
   const config = await loadConfig();
-  const matrix = expandMatrix(config.matrix || []);
+  const variants = expandEnvironmentsAndExperiments(config);
   const runDir = await createRunDir();
   const concurrency = options.concurrency || config.concurrency || 3;
 
@@ -54,14 +54,18 @@ export async function runTests(options: {
   for (const test of config.tests) {
     const testRepetitions = test.repetitions || 1;
     const totalRepetitions = suiteRepetitions * testRepetitions;
-    for (let i = 0; i < totalRepetitions; i++) {
-      for (const m of matrix) {
+    for (const variant of variants) {
+      for (let i = 0; i < totalRepetitions; i++) {
         runId++;
+        const repetition = i + 1;
         allTestRuns.push({
           id: runId,
           test,
-          matrix: m,
-          name: `${test.name} (repetition ${i + 1})`,
+          variant,
+          repetition,
+          name: `${test.name} (${variant.environment}.${
+            variant.experiment
+          } rep ${repetition})`,
         });
       }
     }
@@ -79,7 +83,7 @@ export async function runTests(options: {
     output += `see ${path.join(runDir, "results.json")}\n`;
 
     for (const state of runStates) {
-      let line = `${state.id.toString().padStart(3, "0")}: `;
+      let line = `${state.id.toString().padStart(3, "0")} ${state.name}: `;
       if (state.status === "complete") {
         const passed = Object.values(state.results || {}).filter(
           (r) => (r as number) > 0,
@@ -122,8 +126,9 @@ export async function runTests(options: {
           runDir,
           config,
           run.test,
-          run.matrix,
+          run.variant,
           run.id,
+          run.repetition,
           runState,
         );
 
@@ -134,7 +139,10 @@ export async function runTests(options: {
         results.runs.push({
           id: run.id,
           test: run.test.name,
-          matrix: run.matrix,
+          environment: run.variant.environment,
+          experiment: run.variant.experiment,
+          repetition: run.repetition,
+          variant: run.variant,
           results: evalResult,
           stats,
         });
@@ -145,7 +153,10 @@ export async function runTests(options: {
         results.runs.push({
           id: run.id,
           test: run.test.name,
-          matrix: run.matrix,
+          environment: run.variant.environment,
+          experiment: run.variant.experiment,
+          repetition: run.repetition,
+          variant: run.variant,
           error: {
             message: e.message,
             stack: e.stack,
@@ -165,6 +176,8 @@ export async function runTests(options: {
 
   await Promise.all(workers);
 
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
   clearInterval(renderInterval);
   logUpdate.clear();
   console.log(
@@ -178,11 +191,12 @@ async function runTest(
   runDir: string,
   config: Config,
   test: TercaTest,
-  matrix: ExpandedMatrix,
+  variant: Record<string, any>,
   runId: number,
+  repetition: number,
   runState: RunDisplayState,
 ) {
-  const testRunDir = await setupTestRunDir(runDir, test, runId);
+  const testRunDir = await setupTestRunDir(runDir, test, variant, repetition);
   runState.logFile = path.join(testRunDir, "run.log");
   const logStream = createWriteStream(runState.logFile);
   const artifactsDir = path.join(testRunDir, "artifacts");
@@ -191,13 +205,13 @@ async function runTest(
   try {
     const workspaceDir = await setupWorkspace(testRunDir, config, test);
     await runBeforeActions(workspaceDir, config, test, logStream, runState);
-    await runMatrixCommand(workspaceDir, matrix, logStream, runState);
+    await runVariantCommand(workspaceDir, variant, logStream, runState);
     const stats = await runAgent(
       workspaceDir,
       artifactsDir,
       config,
       test,
-      matrix,
+      variant,
       logStream,
       runState,
     );
@@ -237,17 +251,20 @@ async function createRunDir(): Promise<string> {
 async function setupTestRunDir(
   runDir: string,
   test: TercaTest,
-  runId: number,
+  variant: Record<string, any>,
+  repetition: number,
 ): Promise<string> {
-  // Sanitize test name for directory
-  const sanitizedTestName = test.name.replace(/[\W_]+/g, "-").toLowerCase();
+  const repetitionStr = repetition.toString().padStart(2, "0");
+  const sanitizedTestName = `${variant.environment}.${
+    variant.experiment
+  }.${repetitionStr}`;
+
+  // This is where the symlink will live, inside the .terca directory structure
+  const symlinkPath = path.join(runDir, sanitizedTestName);
 
   // Create a unique temporary directory for the test run
   const tempDirPrefix = path.join(os.tmpdir(), `terca-${sanitizedTestName}-`);
   const testRunTempDir = await fs.mkdtemp(tempDirPrefix);
-
-  // This is where the symlink will live, inside the .terca directory structure
-  const symlinkPath = path.join(runDir, runId.toString());
 
   // Create a symlink from the .terca directory to the temporary directory
   await fs.symlink(testRunTempDir, symlinkPath, "dir");
@@ -317,20 +334,20 @@ async function runBeforeActions(
   }
 }
 
-async function runMatrixCommand(
+async function runVariantCommand(
   workspaceDir: string,
-  matrix: ExpandedMatrix,
+  variant: Record<string, any>,
   logStream: NodeJS.WritableStream,
   runState: RunDisplayState,
 ) {
-  const command = matrix.command as string | undefined;
+  const command = variant.command as string | undefined;
   if (!command) {
     return;
   }
 
-  runState.message = `matrix: running \`${command}\``;
+  runState.message = `variant: running \`${command}\``;
   logStream.write(`
---- Running matrix command: ${command} ---
+--- Running variant command: ${command} ---
 `);
   const [cmd, ...args] = command.split(" ");
   const proc = spawn(cmd, args, {
@@ -343,7 +360,7 @@ async function runMatrixCommand(
     proc.on("close", resolve);
   });
   logStream.write(`
---- End of matrix command: ${command} ---
+--- End of variant command: ${command} ---
 `);
 }
 
@@ -352,11 +369,11 @@ async function runAgent(
   artifactsDir: string,
   config: Config,
   test: TercaTest,
-  matrix: ExpandedMatrix,
+  variant: Record<string, any>,
   logStream: NodeJS.WritableStream,
   runState: RunDisplayState,
 ): Promise<AgentRunnerStats | undefined> {
-  const agent = matrix.agent as string;
+  const agent = variant.agent as string;
   const Runner = AGENT_RUNNERS[agent];
   if (!Runner) {
     console.log(`Unknown agent: ${agent}, skipping`);
@@ -384,8 +401,8 @@ async function runAgent(
     workspaceDir,
     artifactsDir,
     prompt,
-    rulesFile: matrix.rules as string | undefined,
-    mcpServers: matrix.mcpServers as any,
+    rulesFile: variant.rules as string | undefined,
+    mcpServers: variant.mcpServers as any,
     signal: controller.signal,
     logger: logStream,
   };
