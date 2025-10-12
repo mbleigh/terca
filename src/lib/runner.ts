@@ -265,22 +265,15 @@ async function setupTestRunDir(
   repetition: number,
 ): Promise<string> {
   const repetitionStr = repetition.toString().padStart(2, "0");
-  const sanitizedTestName = `${variant.environment}.${
-    variant.experiment
-  }.${repetitionStr}`;
+  const testRunDir = path.join(
+    runDir,
+    test.name,
+    `${variant.environment}.${variant.experiment}.${repetitionStr}`,
+  );
 
-  // This is where the symlink will live, inside the .terca directory structure
-  const symlinkPath = path.join(runDir, sanitizedTestName);
+  await fs.mkdir(testRunDir, { recursive: true });
 
-  // Create a unique temporary directory for the test run
-  const tempDirPrefix = path.join(os.tmpdir(), `terca-${sanitizedTestName}-`);
-  const testRunTempDir = await fs.mkdtemp(tempDirPrefix);
-
-  // Create a symlink from the .terca directory to the temporary directory
-  await fs.symlink(testRunTempDir, symlinkPath, "dir");
-
-  // Return the path to the temporary directory, which will be used as the test run directory
-  return testRunTempDir;
+  return testRunDir;
 }
 
 async function setupWorkspace(
