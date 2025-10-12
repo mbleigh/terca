@@ -3,7 +3,11 @@
 import { runTests } from "../lib/runner.js";
 
 const args = process.argv.slice(2);
-const options: { repetitions?: number; concurrency?: number } = {};
+const options: {
+  repetitions?: number;
+  concurrency?: number;
+  signal?: AbortSignal;
+} = {};
 
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
@@ -15,6 +19,13 @@ for (let i = 0; i < args.length; i++) {
     i++;
   }
 }
+
+const controller = new AbortController();
+options.signal = controller.signal;
+
+process.on("SIGINT", () => {
+  controller.abort();
+});
 
 runTests(options).catch((e: any) => {
   console.error(e);

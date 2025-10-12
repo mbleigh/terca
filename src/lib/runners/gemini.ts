@@ -70,20 +70,37 @@ export class GeminiAgentRunner implements AgentRunner {
         stdio: ["pipe", "pipe", "pipe"],
       });
 
-      const onAbort = () => {
-        child.kill();
-      };
-      options.signal?.addEventListener("abort", onAbort);
-
       const stdoutChunks: Buffer[] = [];
       const stderrChunks: Buffer[] = [];
       child.stdout?.on("data", (chunk) => stdoutChunks.push(chunk as Buffer));
       child.stderr?.on("data", (chunk) => stderrChunks.push(chunk as Buffer));
 
-      const exitCode = await new Promise<number>((resolve) => {
-        child.on("close", resolve);
-      });
-      options.signal?.removeEventListener("abort", onAbort);
+      let exitCode: number;
+      try {
+        exitCode = await new Promise<number>((resolve, reject) => {
+          const onAbort = () => {
+            child.kill();
+            reject(new Error("Aborted"));
+          };
+          options.signal?.addEventListener("abort", onAbort);
+
+          child.on("close", (code) => {
+            options.signal?.removeEventListener("abort", onAbort);
+            resolve(code ?? -1);
+          });
+
+          child.on("error", (err) => {
+            options.signal?.removeEventListener("abort", onAbort);
+            reject(err);
+          });
+        });
+      } catch (err: any) {
+        if (err.message === "Aborted") {
+          exitCode = -1;
+        } else {
+          throw err;
+        }
+      }
 
       const stderr = Buffer.concat(stderrChunks).toString("utf-8");
       if (stderr) {

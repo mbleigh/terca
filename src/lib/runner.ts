@@ -39,6 +39,7 @@ interface RunDisplayState {
 export async function runTests(options: {
   repetitions?: number;
   concurrency?: number;
+  signal?: AbortSignal;
 }) {
   const config = await loadConfig();
   const variants = expandEnvironmentsAndExperiments(config);
@@ -116,6 +117,12 @@ export async function runTests(options: {
   const resultsFile = path.join(runDir, "results.json");
   const queue = [...allTestRuns];
 
+  options.signal?.addEventListener("abort", () => {
+    // Stop any new tests from running
+    queue.length = 0;
+    logUpdate("\nCtrl+C received, finishing in-progress tests...\n");
+  });
+
   async function worker() {
     while (queue.length > 0) {
       const run = queue.shift()!;
@@ -130,6 +137,7 @@ export async function runTests(options: {
           run.id,
           run.repetition,
           runState,
+          options.signal,
         );
 
         runState.status = "complete";
@@ -195,6 +203,7 @@ async function runTest(
   runId: number,
   repetition: number,
   runState: RunDisplayState,
+  signal?: AbortSignal,
 ) {
   const testRunDir = await setupTestRunDir(runDir, test, variant, repetition);
   runState.logFile = path.join(testRunDir, "run.log");
@@ -214,6 +223,7 @@ async function runTest(
       variant,
       logStream,
       runState,
+      signal,
     );
     const evalResult = await evaluate(workspaceDir, test, logStream, runState);
     return { evalResult, stats };
@@ -372,6 +382,7 @@ async function runAgent(
   variant: Record<string, any>,
   logStream: NodeJS.WritableStream,
   runState: RunDisplayState,
+  parentSignal?: AbortSignal,
 ): Promise<AgentRunnerStats | undefined> {
   const agent = variant.agent as string;
   const Runner = AGENT_RUNNERS[agent];
@@ -388,6 +399,16 @@ async function runAgent(
     .trim();
 
   const controller = new AbortController();
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort();
+    } else {
+      parentSignal.addEventListener("abort", () => {
+        controller.abort();
+      });
+    }
+  }
+
   const timeoutSeconds = test.timeoutSeconds || config.timeoutSeconds || 300;
   let timedOut = false;
 
