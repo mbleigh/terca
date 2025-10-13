@@ -191,7 +191,7 @@ Error: ${json.error.message}
 
       yield { done: true, exitCode, stats };
     } finally {
-      await fs.rm(geminiDir, { recursive: true, force: true });
+      // await fs.rm(geminiDir, { recursive: true, force: true });
     }
   }
 }

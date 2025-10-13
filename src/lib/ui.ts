@@ -80,7 +80,9 @@ export function printResults(results: { runs: any[] }) {
         const passedRuns = runs.filter(
           (run) =>
             run.results &&
-            Object.values(run.results).every((score) => (score as number) > 0),
+            Object.values(run.results).every(
+              (result) => ((result as any).score as number) > 0,
+            ),
         );
         const passRate = (passedRuns.length / runs.length) * 100;
 

@@ -50,7 +50,11 @@ export const commandSuccess: EvalAction<"commandSuccess"> = async (
   });
 
   let stdout = "";
+  let stderr = "";
   proc.stdout?.on("data", (data) => {
+    stdout += data.toString();
+  });
+  proc.stderr?.on("data", (data) => {
     stdout += data.toString();
   });
 
@@ -61,28 +65,39 @@ export const commandSuccess: EvalAction<"commandSuccess"> = async (
     proc.on("close", resolve);
   });
 
-  let score = exitCode === 0 ? 1.0 : 0.0;
-  let message = `Command "${command}" exited with code ${exitCode}.`;
-
-  if (score > 0 && outputContains) {
-    if (stdout.includes(outputContains)) {
-      score = 1.0;
-      message += ` Output contains "${outputContains}".`;
-    } else {
-      score = 0.0;
-      message += ` Output does not contain "${outputContains}".`;
-    }
-  }
-
   logStream.write(
     `
 --- End of evaluation command: ${command} (Exit code: ${exitCode}) ---
 `,
   );
-  return {
-    score,
-    message,
-  };
+
+  const cmdOutput = `\n\nSTDOUT:\n${stdout}\n\nSTDERR:\n${stderr}`;
+
+  if (exitCode > 0) {
+    return {
+      score: 0.0,
+      message: `Command '${command}' exited with code ${exitCode}.${cmdOutput}`,
+    };
+  }
+
+  if (!outputContains) {
+    return {
+      score: 1.0,
+      message: `Command '${command}' was successful.${cmdOutput}`,
+    };
+  }
+
+  if (stdout.includes(outputContains)) {
+    return {
+      score: 1.0,
+      message: `Command '${command}' contained output ${JSON.stringify(outputContains)}.${cmdOutput}`,
+    };
+  } else {
+    return {
+      score: 0.0,
+      message: `Command '${command}' output did not contain ${JSON.stringify(outputContains)}.${cmdOutput}`,
+    };
+  }
 };
 
 export const fileExists: EvalAction<"fileExists"> = async (

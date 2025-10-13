@@ -86,7 +86,7 @@ export async function runTests(options: {
       if (state.status === "complete") {
         const evalResults = state.results || {};
         const failedEvals = Object.entries(evalResults).filter(
-          ([, score]) => (score as number) <= 0,
+          ([, result]) => ((result as any).score as number) <= 0,
         );
         const passed = failedEvals.length === 0;
 
@@ -443,10 +443,10 @@ async function evaluate(
         evalCtx,
         evalStep.commandSuccess,
       );
-      results[evalStep.name] = result.score;
+      results[evalStep.name] = result;
     } else if (evalStep.fileExists) {
       const result = await evalActions.fileExists(evalCtx, evalStep.fileExists);
-      results[evalStep.name] = result.score;
+      results[evalStep.name] = result;
     }
   }
   return results;

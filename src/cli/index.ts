@@ -27,7 +27,17 @@ for (let i = 0; i < args.length; i++) {
 const controller = new AbortController();
 options.signal = controller.signal;
 
+let lastInterrupt = 0;
 process.on("SIGINT", () => {
+  const now = Date.now();
+  if (now - lastInterrupt < 1000) {
+    console.log("\nImmediate exit requested.");
+    process.exit(1);
+  }
+  lastInterrupt = now;
+  console.log(
+    "\nGracefully stopping... (press Ctrl+C again within 1s to force)",
+  );
   controller.abort();
 });
 
