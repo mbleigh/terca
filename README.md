@@ -2,6 +2,13 @@
 
 Terca is a test and evaluation runner for CLI-based coding agents. It allows you to define a suite of tests and run them against different configurations of your agent, helping you gain confidence in its capabilities.
 
+## Installation
+
+```console
+gsutil cp gs://dotguides-preview/terca-latest.tgz terca-latest.tgz
+npm i -g terca-latest.tgz
+```
+
 ## Getting Started
 
 1.  Create a `terca.yaml` file in your project's root directory.
@@ -127,5 +134,6 @@ terca [options]
 | `-x, --experiment <exp_name>` | Run only the specified experiment.        |
 | `-n, --repetitions <n>`   | Override the number of repetitions.       |
 | `-c, --concurrency <n>`   | Override the concurrency level.           |
+| `-v, --version`           | Print the current Terca CLI version.      |
 
 ```

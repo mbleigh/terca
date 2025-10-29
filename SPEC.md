@@ -108,6 +108,7 @@ The `eval` section allows you to define a list of evaluators to run after each t
 - `terca` in directory with a `terca.yaml` should start the test runner and run the tests in it
 - `terca -t <test_name>` or `terca --test <test_name>` should run only the specified test.
 - `terca -x <experiment_name>` or `terca --experiment <experiment_name>` should run only the specified experiment.
+- `terca -v` or `terca --version` should print the current version of the Terca CLI.
 - it should provide nicely formatted and colored progress output as each test runs
 - it should create a `.terca/runs/YYYY-MM-DD-NNN` directory when it starts running where NNN is numbered sequentially based on existing dirs
 - inside that dir, it should keep log files containing full output for each of the matrix runs
