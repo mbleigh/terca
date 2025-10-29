@@ -1,3 +1,7 @@
+> [!WARNING]
+> Terca is pre-alpha software. It is almost certainly broken in all kinds of ways.
+
+
 # Terca
 
 Terca is a test and evaluation runner for CLI-based coding agents. It allows you to define a suite of tests and run them against different configurations of your agent, helping you gain confidence in its capabilities.
@@ -21,6 +25,20 @@ You should see a version number printed when `terca -v` is run.
     ```bash
     terca
     ```
+
+## Exploring Results
+
+Each invocation of the `terca` command creates a new folder in `.terca/runs`, with subfolders for each test and environment/experiment/repetition combination. Each run has a `results.json` which aggregates the final results of each test as well as log files, artifacts, and the workspace as it was after the task completed for each run.
+
+```sh
+.terca/runs/2025-10-28-001
+  results.json # the aggregate results
+  {test_name}/
+    {environment}.{experiment}.{repetition}/
+      artifacts/ # detailed artifacts e.g. telemetry logs
+      workspace  # the workspace the agent was running in
+      run.log    # a log file of the run's progress
+```
 
 ## `terca.yaml` Configuration Reference
 
@@ -138,5 +156,3 @@ terca [options]
 | `-n, --repetitions <n>`   | Override the number of repetitions.       |
 | `-c, --concurrency <n>`   | Override the concurrency level.           |
 | `-v, --version`           | Print the current Terca CLI version.      |
-
-```
