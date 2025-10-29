@@ -22,6 +22,8 @@ interface AgentRunnerOptions {
   mcpServers?: Record<string, McpServerConfig>;
   /** additional non-standardized config that can be applied to the agent */
   config?: any;
+  /** signal to abort the run */
+  signal?: AbortSignal;
 }
 
 interface AgentRunner {
@@ -61,9 +63,51 @@ Notes on agent runners:
 - Before spawning a process, you will need to write configuration files to set up the rules, mcp servers, etc for the agent
 - Use child_process spawn to run the commands
 
+## Terca Configuration
+
+A `terca.yaml` file is used to configure the test runner. The following options are available:
+
+- `name`: The name of the test suite.
+- `description`: A description of the test suite.
+- `workspaceDir`: The directory to use as the workspace for all tests.
+- `repetitions`: The number of times to run each test.
+- `concurrency`: The number of tests to run in parallel.
+- `timeoutSeconds`: The number of seconds to wait for a test to complete before timing out.
+- `preamble`: A command to run before all tests.
+- `postamble`: A command to run after all tests.
+- `before`: A list of actions to run before each test.
+- `tests`: A list of tests to run.
+- `environments`: A list of environments to run the tests in.
+- `experiments`: A list of experiments to run the tests in.
+
+### Environments and Experiments
+
+The `environments` and `experiments` sections allow you to define a matrix of configurations to run your tests against. The configurations are combined to create a list of test runs.
+
+An `environment` defines a set of configurations that are related to the environment in which the tests are run, such as the agent, rules, and MCP servers.
+
+An `experiment` defines a set of configurations that are related to the experiment you are running, such as the agent, rules, and command.
+
+### Before Actions
+
+The `before` section allows you to run a list of actions before each test. The following actions are available:
+
+- `copy`: Copy a file or directory. The value is a map of source to destination.
+- `files`: Create a file with the given content. The value is a map of filename to content.
+- `command`: Run a command.
+
+### Evaluators
+
+The `eval` section allows you to define a list of evaluators to run after each test. The following evaluators are available:
+
+- `commandSuccess`: Check if a command runs successfully. The value can be a string with the command to run, or an object with a `command` and an `outputContains` string.
+- `fileExists`: Check if a file or list of files exists.
+
 ## Terca CLI
 
 - `terca` in directory with a `terca.yaml` should start the test runner and run the tests in it
+- `terca -t <test_name>` or `terca --test <test_name>` should run only the specified test.
+- `terca -x <experiment_name>` or `terca --experiment <experiment_name>` should run only the specified experiment.
 - it should provide nicely formatted and colored progress output as each test runs
 - it should create a `.terca/runs/YYYY-MM-DD-NNN` directory when it starts running where NNN is numbered sequentially based on existing dirs
 - inside that dir, it should keep log files containing full output for each of the matrix runs
