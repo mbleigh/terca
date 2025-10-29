@@ -7,7 +7,10 @@ Terca is a test and evaluation runner for CLI-based coding agents. It allows you
 ```console
 gsutil cp gs://dotguides-preview/terca-latest.tgz terca-latest.tgz
 npm i -g terca-latest.tgz
+terca -v
 ```
+
+You should see a version number printed when `terca -v` is run.
 
 ## Getting Started
 

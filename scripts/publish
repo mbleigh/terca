@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -e
+
+VERSION=$(node -p "require('./package.json').version")
+PACKAGE_NAME="terca-${VERSION}.tgz"
+
+pnpm pack
+
+gsutil cp "${PACKAGE_NAME}" "gs://dotguides-preview/terca-${VERSION}.tgz"
+gsutil cp "${PACKAGE_NAME}" "gs://dotguides-preview/terca-latest.tgz"
