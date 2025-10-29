@@ -9,7 +9,7 @@
     "start": "tsx src/cli/index.ts",
     "build": "tsc",
     "build:watch": "tsc --watch",
-    "test": "vitest",
+    "test": "tsc --noEmit && vitest",
     "test:watch": "vitest --watch",
     "prepack": "npm run build"
   },

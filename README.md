@@ -23,11 +23,11 @@ The `terca.yaml` file is the heart of Terca. It allows you to configure your tes
 | `name`          | `string`            | The name of your test suite.                                                                            |
 | `description`   | `string`            | (Optional) A description of your test suite.                                                            |
 | `workspaceDir`  | `string`            | (Optional) The directory to use as the workspace for all tests.                                         |
-| `repetitions`   | `number`            | (Optional) The number of times to run each test.                                                        |
-| `concurrency`   | `number`            | (Optional) The number of tests to run in parallel.                                                      |
+| `repetitions`   | `number`            | (Optional) The number of times to run each test. Can be overridden by CLI flags.                                                 |
+| `concurrency`   | `number`            | (Optional) The number of tests to run in parallel. Can be overridden by CLI flags.                                                      |
 | `timeoutSeconds`| `number`            | (Optional) The number of seconds to wait for a test to complete before timing out.                      |
-| `preamble`      | `string`            | (Optional) A command to run before all tests.                                                           |
-| `postamble`     | `string`            | (Optional) A command to run after all tests.                                                            |
+| `preamble`      | `string`            | (Optional) Prefix all test prompts with this content.                                                           |
+| `postamble`     | `string`            | (Optional) Postfix all test prompts with this content.                                                            |
 | `before`        | `BeforeAction[]`    | (Optional) A list of actions to run before each test.                                                   |
 | `tests`         | `TercaTest[]`       | A list of tests to run.                                                                                 |
 | `environments`  | `Environment[]`     | (Optional) A list of environments to run the tests in.                                                  |
