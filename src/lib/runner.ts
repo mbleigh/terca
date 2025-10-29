@@ -33,7 +33,8 @@ export async function runTests(options: {
   repetitions?: number;
   concurrency?: number;
   signal?: AbortSignal;
-  only?: string[];
+  test?: string[];
+  experiment?: string[];
 }) {
   const config = await loadConfig();
   const variants = expandEnvironmentsAndExperiments(config);
@@ -46,14 +47,20 @@ export async function runTests(options: {
   let runId = 0;
   const suiteRepetitions = options.repetitions || config.repetitions || 1;
 
-  const testsToRun = options.only
-    ? config.tests.filter((test) => options.only?.includes(test.name))
+  const testsToRun = options.test
+    ? config.tests.filter((test) => options.test?.includes(test.name))
     : config.tests;
+
+  const variantsToRun = options.experiment
+    ? variants.filter((variant) =>
+        options.experiment?.includes(variant.experiment),
+      )
+    : variants;
 
   for (const test of testsToRun) {
     const testRepetitions = test.repetitions || 1;
     const totalRepetitions = suiteRepetitions * testRepetitions;
-    for (const variant of variants) {
+    for (const variant of variantsToRun) {
       for (let i = 0; i < totalRepetitions; i++) {
         runId++;
         const repetition = i + 1;
@@ -361,7 +368,13 @@ async function runAgent(
   const runner = new Runner();
   runState.message = `agent \`${agent}\` running...`;
 
-  const prompt = [config.preamble, test.prompt, config.postamble]
+  const prompt = [
+    config.preamble,
+    variant.preamble,
+    test.prompt,
+    variant.postamble,
+    config.postamble,
+  ]
     .filter(Boolean)
     .join("\n\n")
     .trim();

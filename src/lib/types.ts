@@ -8,12 +8,23 @@ export const SupportedAgentSchema = z.enum([
 ]);
 export type SupportedAgent = z.infer<typeof SupportedAgentSchema>;
 
-export const McpServerConfigSchema = z.object({
+export const McpServerStdioConfigSchema = z.object({
   command: z.string(),
   args: z.array(z.string()).optional(),
   env: z.record(z.string(), z.string()).optional(),
   cwd: z.string().optional(),
 });
+
+export const McpServerHttpConfigSchema = z.object({
+  url: z.string(),
+  headers: z.record(z.string(), z.string()).optional(),
+});
+
+export const McpServerConfigSchema = z.union([
+  McpServerStdioConfigSchema,
+  McpServerHttpConfigSchema,
+]);
+
 export type McpServerConfig = z.infer<typeof McpServerConfigSchema>;
 
 export const McpServersConfigSchema = z.record(
@@ -37,6 +48,8 @@ export const ExperimentSchema = z.object({
   rules: z.string().optional(),
   mcpServers: McpServersConfigSchema.optional(),
   command: z.string().optional(),
+  preamble: z.string().optional(),
+  postamble: z.string().optional(),
 });
 export type Experiment = z.infer<typeof ExperimentSchema>;
 

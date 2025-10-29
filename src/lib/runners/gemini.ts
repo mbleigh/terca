@@ -53,6 +53,14 @@ export class GeminiAgentRunner implements AgentRunner {
           ...(settings.mcpServers || {}),
           ...options.mcpServers,
         };
+        for (const key in options.mcpServers) {
+          const server = options.mcpServers[key] as any;
+          const url = server.url;
+          if (url) {
+            delete server.url;
+            server.httpUrl = url;
+          }
+        }
       }
 
       settings.telemetry = {
@@ -64,6 +72,12 @@ export class GeminiAgentRunner implements AgentRunner {
       if (Object.keys(settings).length > 0) {
         await fs.writeFile(settingsFile, JSON.stringify(settings, null, 2));
       }
+
+      const command = [
+        "gemini",
+        ...args.map((arg) => (arg.includes(" ") ? JSON.stringify(arg) : arg)),
+      ].join(" ");
+      logger.write(`> ${command}\n`);
 
       const child = spawn("gemini", args, {
         cwd: options.workspaceDir,

@@ -7,7 +7,8 @@ const options: {
   repetitions?: number;
   concurrency?: number;
   signal?: AbortSignal;
-  only?: string[];
+  test?: string[];
+  experiment?: string[];
 } = {};
 
 for (let i = 0; i < args.length; i++) {
@@ -18,8 +19,11 @@ for (let i = 0; i < args.length; i++) {
   } else if (arg === "-c" || arg === "--concurrency") {
     options.concurrency = parseInt(args[i + 1], 10);
     i++;
-  } else if (arg === "--only") {
-    options.only = args[i + 1].split(",");
+  } else if (arg === "-t" || arg === "--test") {
+    options.test = args[i + 1].split(",");
+    i++;
+  } else if (arg === "-x" || arg === "--experiment") {
+    options.experiment = args[i + 1].split(",");
     i++;
   }
 }
