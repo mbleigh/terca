@@ -33,12 +33,20 @@ export const McpServersConfigSchema = z.record(
 );
 export type McpServersConfig = z.infer<typeof McpServersConfigSchema>;
 
+export const TercaBeforeActionSchema = z.union([
+  z.object({ copy: z.record(z.string(), z.string()) }),
+  z.object({ files: z.record(z.string(), z.string()) }),
+  z.object({ command: z.string() }),
+]);
+export type TercaBeforeAction = z.infer<typeof TercaBeforeActionSchema>;
+
 export const EnvironmentSchema = z.object({
   name: z.string(),
   agent: SupportedAgentSchema.optional(),
   rules: z.string().optional(),
   mcpServers: McpServersConfigSchema.optional(),
   command: z.string().optional(),
+  before: z.array(TercaBeforeActionSchema).optional(),
 });
 export type Environment = z.infer<typeof EnvironmentSchema>;
 
@@ -53,12 +61,6 @@ export const ExperimentSchema = z.object({
 });
 export type Experiment = z.infer<typeof ExperimentSchema>;
 
-export const TercaBeforeActionSchema = z.union([
-  z.object({ copy: z.record(z.string(), z.string()) }),
-  z.object({ files: z.record(z.string(), z.string()) }),
-  z.object({ command: z.string() }),
-]);
-export type TercaBeforeAction = z.infer<typeof TercaBeforeActionSchema>;
 
 export const TercaEvaluatorActionsSchema = z.object({
   commandSuccess: z

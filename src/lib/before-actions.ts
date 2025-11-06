@@ -50,7 +50,9 @@ async function files(
   payload: Record<string, string>,
 ) {
   ctx.runState.message = `before: writing files`;
+  ctx.logStream.write(`\n--- Before: writing files: ${Object.keys(payload).join(", ")} ---\n`);
   for (const [dest, content] of Object.entries(payload)) {
+    await fs.mkdir(path.dirname(path.join(ctx.workspaceDir, dest as string)), { recursive: true });
     await fs.writeFile(
       path.join(ctx.workspaceDir, dest as string),
       content as string,
@@ -71,10 +73,15 @@ export async function runBeforeActions(
   workspaceDir: string,
   config: Config,
   test: TercaTest,
+  variant: Record<string, any>,
   logStream: NodeJS.WritableStream,
   runState: RunDisplayState,
 ) {
-  const actions = [...(config.before || []), ...(test.before || [])];
+  const actions = [
+    ...(config.before || []),
+    ...(variant.before || []),
+    ...(test.before || []),
+  ];
   const ctx: BeforeActionContext = { workspaceDir, logStream, runState };
 
   for (const action of actions) {

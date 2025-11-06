@@ -241,7 +241,14 @@ async function runTest(
 
   try {
     const workspaceDir = await setupWorkspace(testRunDir, config, test);
-    await runBeforeActions(workspaceDir, config, test, logStream, runState);
+    await runBeforeActions(
+      workspaceDir,
+      config,
+      test,
+      variant,
+      logStream,
+      runState,
+    );
     await runVariantCommand(workspaceDir, variant, logStream, runState);
     const stats = await runAgent(
       workspaceDir,
