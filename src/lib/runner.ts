@@ -35,6 +35,7 @@ export async function runTests(options: {
   signal?: AbortSignal;
   test?: string[];
   experiment?: string[];
+  environment?: string[];
 }) {
   const config = await loadConfig();
   const variants = expandEnvironmentsAndExperiments(config);
@@ -51,11 +52,17 @@ export async function runTests(options: {
     ? config.tests.filter((test) => options.test?.includes(test.name))
     : config.tests;
 
-  const variantsToRun = options.experiment
-    ? variants.filter((variant) =>
-        options.experiment?.includes(variant.experiment),
-      )
-    : variants;
+  let variantsToRun = variants;
+  if (options.experiment) {
+    variantsToRun = variantsToRun.filter((variant) =>
+      options.experiment?.includes(variant.experiment),
+    );
+  }
+  if (options.environment) {
+    variantsToRun = variantsToRun.filter((variant) =>
+      options.environment?.includes(variant.environment),
+    );
+  }
 
   for (const test of testsToRun) {
     const testRepetitions = test.repetitions || 1;

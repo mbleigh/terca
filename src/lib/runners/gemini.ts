@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import readline from "readline";
 import {
   AgentRunner,
   AgentRunnerOptions,
@@ -13,7 +14,13 @@ export class GeminiAgentRunner implements AgentRunner {
     const startTime = Date.now();
     const geminiDir = path.join(options.workspaceDir, ".gemini");
     const settingsFile = path.join(geminiDir, "settings.json");
-    const args = ["-p", options.prompt, "--yolo", "--output-format", "json"];
+    const args = [
+      "-p",
+      options.prompt,
+      "--yolo",
+      "--output-format",
+      "stream-json",
+    ];
     const logger = options.logger || process.stderr;
 
     try {
@@ -84,123 +91,104 @@ export class GeminiAgentRunner implements AgentRunner {
         stdio: ["pipe", "pipe", "pipe"],
       });
 
-      const stdoutChunks: Buffer[] = [];
       const stderrChunks: Buffer[] = [];
-      child.stdout?.on("data", (chunk) => stdoutChunks.push(chunk as Buffer));
       child.stderr?.on("data", (chunk) => stderrChunks.push(chunk as Buffer));
 
-      let exitCode: number;
-      try {
-        exitCode = await new Promise<number>((resolve, reject) => {
-          const onAbort = () => {
-            child.kill();
-            reject(new Error("Aborted"));
-          };
-          options.signal?.addEventListener("abort", onAbort);
+      const exitCodePromise = new Promise<number>((resolve, reject) => {
+        const onAbort = () => {
+          child.kill();
+          reject(new Error("Aborted"));
+        };
+        options.signal?.addEventListener("abort", onAbort);
 
-          child.on("close", (code) => {
-            options.signal?.removeEventListener("abort", onAbort);
-            resolve(code ?? -1);
-          });
-
-          child.on("error", (err) => {
-            options.signal?.removeEventListener("abort", onAbort);
-            reject(err);
-          });
+        child.on("close", (code) => {
+          options.signal?.removeEventListener("abort", onAbort);
+          resolve(code ?? -1);
         });
-      } catch (err: any) {
-        if (err.message === "Aborted") {
-          exitCode = -1;
-        } else {
-          throw err;
+
+        child.on("error", (err) => {
+          options.signal?.removeEventListener("abort", onAbort);
+          reject(err);
+        });
+      });
+
+      const transcriptFile = path.join(
+        options.artifactsDir,
+        "gemini-transcript.jsonl",
+      );
+      await fs.writeFile(transcriptFile, ""); // Clear the file
+
+      let stats: AgentRunnerStats | undefined;
+      let requestCount = 0;
+
+      const lineReader = readline.createInterface({
+        input: child.stdout!,
+      });
+
+      for await (const line of lineReader) {
+        if (line.trim() === "") continue;
+
+        await fs.appendFile(transcriptFile, line + "\n");
+
+        try {
+          const event = JSON.parse(line);
+
+          switch (event.type) {
+            case "message":
+              if (event.role === "assistant" && event.content) {
+                yield { output: event.content };
+              }
+              break;
+            case "tool_use":
+              requestCount++;
+              yield {
+                output: `\n> ${event.tool_name}(${JSON.stringify(
+                  event.parameters,
+                )})\n`,
+              };
+              break;
+            case "tool_result":
+              yield {
+                output: `\n< ${event.tool_id}:\n${event.output}\n`,
+              };
+              break;
+            case "error":
+              yield {
+                output: `\nError: ${event.message}\n`,
+              };
+              break;
+            case "result":
+              if (event.stats) {
+                stats = {
+                  requests: requestCount + 1, // +1 for initial prompt
+                  inputTokens: event.stats.input_tokens || 0,
+                  outputTokens: event.stats.output_tokens || 0,
+                  cachedInputTokens: event.stats.cached_tokens || 0,
+                  durationSeconds: (event.stats.duration_ms || 0) / 1000,
+                };
+              }
+              break;
+          }
+        } catch (e: any) {
+          logger.write(`Error parsing JSON event: ${e.message}\n`);
         }
       }
+
+      const exitCode = await exitCodePromise;
 
       const stderr = Buffer.concat(stderrChunks).toString("utf-8");
       if (stderr) {
         yield { output: stderr };
       }
 
-      const stdout = Buffer.concat(stdoutChunks).toString("utf-8");
-      let stats: AgentRunnerStats | undefined;
+      // Always try to get stats from telemetry as it includes cached tokens
+      const telemetryFile = path.join(options.artifactsDir, "telemetry.log");
+      const telemetryStats = await parseTelemetryLog(telemetryFile, (msg) =>
+        logger.write(msg),
+      );
 
-      if (stdout) {
-        const outputFile = path.join(
-          options.artifactsDir,
-          "gemini-output.json",
-        );
-        await fs.writeFile(outputFile, stdout);
-        let json;
-        try {
-          json = JSON.parse(stdout);
-        } catch (e: any) {
-          if (exitCode !== 0) {
-            const match = stdout.match(/{[\s\S]*}/);
-            if (match) {
-              try {
-                json = JSON.parse(match[0]);
-              } catch (e2) {
-                // ignore
-              }
-            }
-          }
-          if (!json) {
-            yield { output: stdout };
-            yield {
-              output: `
-Error parsing JSON output: ${e.message}
-`,
-            };
-          }
-        }
-
-        if (json) {
-          if (json.response) {
-            yield { output: json.response };
-          }
-
-          if (json.stats && json.stats.models) {
-            let totalRequests = 0;
-            let totalInputTokens = 0;
-            let totalCachedInputTokens = 0;
-            let totalOutputTokens = 0;
-
-            for (const modelName in json.stats.models) {
-              const modelMetrics = json.stats.models[modelName];
-              if (modelMetrics.api) {
-                totalRequests += modelMetrics.api.totalRequests || 0;
-              }
-              if (modelMetrics.tokens) {
-                totalInputTokens += modelMetrics.tokens.prompt || 0;
-                totalCachedInputTokens += modelMetrics.tokens.cached || 0;
-                totalOutputTokens += modelMetrics.tokens.candidates || 0;
-              }
-            }
-
-            stats = {
-              requests: totalRequests,
-              inputTokens: totalInputTokens,
-              cachedInputTokens: totalCachedInputTokens,
-              outputTokens: totalOutputTokens,
-              durationSeconds: (Date.now() - startTime) / 1000,
-            };
-          }
-
-          if (json.error) {
-            yield {
-              output: `
-Error: ${json.error.message}
-`,
-            };
-          }
-        }
-      }
-
-      if (exitCode !== 0 && !stats) {
-        const telemetryFile = path.join(options.artifactsDir, "telemetry.log");
-        stats = await parseTelemetryLog(telemetryFile, (msg) =>
-          logger.write(msg),
-        );
+      if (telemetryStats) {
+        stats = telemetryStats;
       }
 
       yield { done: true, exitCode, stats };

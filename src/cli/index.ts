@@ -14,6 +14,7 @@ const options: {
   signal?: AbortSignal;
   test?: string[];
   experiment?: string[];
+  environment?: string[];
 } = {};
 
 let command = "run";
@@ -34,6 +35,9 @@ for (let i = 0; i < args.length; i++) {
     i++;
   } else if (arg === "-x" || arg === "--experiment") {
     options.experiment = args[i + 1].split(",");
+    i++;
+  } else if (arg === "-e" || arg === "--environment") {
+    options.environment = args[i + 1].split(",");
     i++;
   }
 }
