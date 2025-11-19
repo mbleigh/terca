@@ -156,3 +156,9 @@ terca [options]
 | `-n, --repetitions <n>`   | Override the number of repetitions.       |
 | `-c, --concurrency <n>`   | Override the concurrency level.           |
 | `-v, --version`           | Print the current Terca CLI version.      |
+
+## Notices
+
+This is not an officially supported Google product. This project is not
+eligible for the [Google Open Source Software Vulnerability Rewards
+Program](https://bughunters.google.com/open-source-security).
