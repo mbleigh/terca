@@ -9,8 +9,7 @@ Terca is a test and evaluation runner for CLI-based coding agents. It allows you
 ## Installation
 
 ```console
-gsutil cp gs://dotguides-preview/terca-latest.tgz terca-latest.tgz
-npm i -g terca-latest.tgz
+npm i -g terca
 terca -v
 ```
 
@@ -18,7 +17,7 @@ You should see a version number printed when `terca -v` is run.
 
 ## Getting Started
 
-1.  Create a `terca.yaml` file in your project's root directory.
+1.  Create a `terca.yaml` file in your eval project's root directory.
 2.  Define your tests, environments, and experiments in the `terca.yaml` file.
 3.  Run Terca from the command line:
 
