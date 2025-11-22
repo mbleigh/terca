@@ -66,53 +66,27 @@ Each invocation of the `terca` command creates a new folder in `.terca/runs`, wi
 
 ### Top-Level Configuration (`terca.yaml`)
 
-| Field           | Type                | Description                                                                                             |
-| --------------- | ------------------- | ------------------------------------------------------------------------------------------------------- |
-| `name`          | `string`            | The name of your test suite.                                                                            |
-| `description`   | `string`            | (Optional) A description of your test suite.                                                            |
-| `repetitions`   | `number`            | (Optional) The number of times to run each eval. Can be overridden by CLI flags.                                                 |
-| `concurrency`   | `number`            | (Optional) The number of evals to run in parallel. Can be overridden by CLI flags.                                                      |
-| `timeoutSeconds`| `number`            | (Optional) The number of seconds to wait for an eval to complete before timing out.                      |
-| `preamble`      | `string`            | (Optional) Prefix all test prompts with this content.                                                           |
-| `postamble`     | `string`            | (Optional) Postfix all test prompts with this content.                                                            |
-| `before`        | `BeforeAction[]`    | (Optional) A list of actions to run before all evals.                                                   |
-| `evals`         | `Eval[]`            | A list of evals to run.                                                                                 |
-| `environments`  | `Environment[]`     | (Optional) A list of environments to run the evals in.                                                  |
-| `experiments`   | `Experiment[]`      | (Optional) A list of experiments to run.                                                                |
-
-### Environments and Experiments
-
-The `environments` and `experiments` sections allow you to define a matrix of configurations to run your tests against. The configurations are combined to create a list of test runs.
-
-An `environment` defines a set of configurations that are related to the environment in which the tests are run, such as the agent, rules, and MCP servers.
-
-An `experiment` defines a set of configurations that are related to the experiment you are running, such as the agent, rules, and command.
-
-**Example:**
-
 ```yaml
-environments:
-  - name: default-agent
-    agent: gemini-cli
-    rules: default_rules.txt
-experiments:
-  - name: no-extra-context
-  - name: with-extra-context
-    command: setup_context.sh
-    postamble: Always use the provided context to answer questions.
-```
+# Required. The name of your test suite.
+name: my-test-suite
+# Optional. A description of your test suite.
+description: A description of my test suite.
 
-### Before Actions
+# Optional. Prefix all test prompts with this content.
+preamble: |
+  You are a helpful assistant.
+# Optional. Postfix all test prompts with this content.
+postamble: |
+  Always format your output as JSON.
 
-The `before` section allows you to run a list of actions before each test. The following actions are available:
+# Optional. The number of times to run each eval. Can be overridden by CLI flags.
+repetitions: 1
+# Optional. The number of evals to run in parallel. Can be overridden by CLI flags.
+concurrency: 4
+# Optional. The number of seconds to wait for an eval to complete before timing out.
+timeoutSeconds: 300
 
-- `copy`: Copy a file or directory. The value is a map of source to destination.
-- `files`: Create a file with the given content. The value is a map of filename to content.
-- `command`: Run a command.
-
-**Example:**
-
-```yaml
+# Optional. A list of actions to run before all evals.
 before:
   - command: npm install
   - copy:
@@ -122,42 +96,73 @@ before:
         {
           "api_key": "YOUR_API_KEY"
         }
+
+# Optional. A list of environments to run the evals in.
+environments:
+  - name: default-agent
+    agent: gemini-cli
+    rules: default_rules.txt
+# Optional. A list of experiments to run.
+experiments:
+  - name: no-extra-context
+  - name: with-extra-context
+    command: setup_context.sh
+    postamble: Always use the provided context to answer questions.
+
+# A list of evals to run. (Can also be defined in separate directories)
+evals:
+  - name: my-eval
+    prompt: "Hello, world!"
 ```
 
-### Eval Configuration (`Eval`)
+### Eval Configuration (`eval.terca.yaml`)
 
-| Field           | Type                | Description                                                                                             |
-| --------------- | ------------------- | ------------------------------------------------------------------------------------------------------- |
-| `name`          | `string`            | The name of the eval.                                                                                   |
-| `description`   | `string`            | (Optional) A description of the eval.                                                                   |
-| `prompt`        | `string`            | The prompt to give to the agent.                                                                        |
-| `repetitions`   | `number`            | (Optional) The number of times to run this eval.                                                        |
-| `timeoutSeconds`| `number`            | (Optional) The number of seconds to wait for this eval to complete before timing out.                   |
-| `before`        | `BeforeAction[]`    | (Optional) A list of actions to run before this eval.                                                   |
-| `tests`         | `Test[]`            | (Optional) A list of tests to run to verify the agent's work.                                           |
-
-### Test Configuration (`Test`)
-
-The `tests` section allows you to define a list of tests to run after each eval. The following tests are available:
-
-| Field           | Type                | Description                                                                                             |
-| --------------- | ------------------- | ------------------------------------------------------------------------------------------------------- |
-| `name`          | `string`            | The name of the test.                                                                                   |
-| `commandSuccess`| `string \| object`  | (Optional) A command to run. If it exits with 0, the test passes. Can also specify `outputContains`.    |
-| `fileExists`    | `string \| string[]`| (Optional) A file or list of files that must exist for the test to pass.                                |
-The `tests` section allows you to define a list of tests to run after each eval. The following tests are available:
-
-- `commandSuccess`: Check if a command runs successfully. The value can be a string with the command to run, or an object with a `command` and an `outputContains` string.
-- `fileExists`: Check if a file or list of files exists.
-
-**Example:**
+Each eval directory can contain an `eval.terca.yaml` file which defines the eval configuration.
 
 ```yaml
+# Required. The prompt to give to the agent.
+prompt: "Hello, world!"
+# Optional. The name of the eval. Defaults to the directory name.
+name: my-eval
+# Optional. A description of the eval.
+description: A description of the eval.
+
+# Optional. The number of times to run this eval.
+repetitions: 1
+# Optional. The number of seconds to wait for this eval to complete before timing out.
+timeoutSeconds: 300
+
+# Optional. A list of actions to run before this eval.
+before:
+  - command: npm install
+
+# Optional. A list of tests to run to verify the agent's work.
 tests:
   - name: check_output_file
     fileExists: output.txt
   - name: verify_script_runs
     commandSuccess: node script.js
+```
+
+### Test Configuration
+
+The `tests` section allows you to define a list of tests to run after each eval.
+
+```yaml
+tests:
+  # Check if a file or list of files exists.
+  - name: check_output_file
+    fileExists: output.txt
+  - name: check_multiple_files
+    fileExists:
+      - output1.txt
+      - output2.txt
+
+  # Check if a command runs successfully.
+  - name: verify_script_runs
+    commandSuccess: node script.js
+  
+  # Check if a command runs successfully and its output contains a string.
   - name: validate_content
     commandSuccess:
       command: grep "Expected output" output.txt

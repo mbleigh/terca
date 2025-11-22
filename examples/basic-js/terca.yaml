@@ -15,5 +15,6 @@
 name: basic-js
 before:
   - command: npm i
-matrix:
-  - agent: gemini
+environments:
+  - name: default
+    agent: gemini-cli

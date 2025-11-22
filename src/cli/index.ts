@@ -21,6 +21,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
+import { createProject, createEval } from "./create.js";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const args = process.argv.slice(2);
@@ -34,10 +36,18 @@ const options: {
 } = {};
 
 let command = "run";
+let commandArg: string | undefined;
 
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
-  if (arg === "-v" || arg === "--version") {
+  if (arg === "create") {
+    command = "create";
+    break;
+  } else if (arg === "create-eval") {
+    command = "create-eval";
+    commandArg = args[i + 1];
+    break;
+  } else if (arg === "-v" || arg === "--version") {
     command = "version";
     break;
   } else if (arg === "-n" || arg === "--repetitions") {
@@ -63,6 +73,16 @@ if (command === "version") {
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
   console.log(packageJson.version);
   process.exit(0);
+} else if (command === "create") {
+  createProject().catch((e: any) => {
+    console.error(e);
+    process.exit(1);
+  });
+} else if (command === "create-eval") {
+  createEval(commandArg).catch((e: any) => {
+    console.error(e);
+    process.exit(1);
+  });
 } else {
   const controller = new AbortController();
   options.signal = controller.signal;

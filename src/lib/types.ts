@@ -17,8 +17,8 @@
 import { z } from "zod";
 
 export const SupportedAgentSchema = z.enum([
-  "gemini",
-  "claude",
+  "gemini-cli",
+  "claude-code",
   "codex",
   "opencode",
 ]);
