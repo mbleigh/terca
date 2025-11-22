@@ -18,47 +18,67 @@ You should see a version number printed when `terca -v` is run.
 ## Getting Started
 
 1.  Create a `terca.yaml` file in your eval project's root directory.
-2.  Define your tests, environments, and experiments in the `terca.yaml` file.
+2.  Create test directories with `eval.terca.yaml` files.
 3.  Run Terca from the command line:
 
     ```bash
     terca
     ```
 
+## Project Structure
+
+Terca uses a hierarchical structure to organize tests and configuration.
+
+```
+project_dir/
+  terca.yaml          # Global config (environments, experiments)
+  _base/              # Baseline files for all evals
+  001-some-eval/      # Eval directory
+    eval.terca.yaml   # Eval-specific config
+    _base/            # Eval-specific file overlays
+```
+
+### `_base` Directories
+
+The `_base` directories are used to layer files into the test workspace.
+1.  **Project Base**: Files in `project_dir/_base` are copied first.
+2.  **Eval Base**: Files in `eval_dir/_base` are copied next, overwriting any project-level files.
+
+### `eval.terca.yaml`
+
+Each eval directory can contain an `eval.terca.yaml` file which defines the eval configuration. This file supports the same schema as the `evals` array in `terca.yaml`. If `name` is omitted, it defaults to the directory name.
+
 ## Exploring Results
 
-Each invocation of the `terca` command creates a new folder in `.terca/runs`, with subfolders for each test and environment/experiment/repetition combination. Each run has a `results.json` which aggregates the final results of each test as well as log files, artifacts, and the workspace as it was after the task completed for each run.
+Each invocation of the `terca` command creates a new folder in `.terca/runs`, with subfolders for each eval and environment/experiment/repetition combination. Each run has a `results.json` which aggregates the final results of each eval as well as log files, artifacts, and the workspace as it was after the task completed for each run.
 
 ```sh
 .terca/runs/2025-10-28-001
   results.json # the aggregate results
-  {test_name}/
+  {eval_name}/
     {environment}.{experiment}.{repetition}/
       artifacts/ # detailed artifacts e.g. telemetry logs
       workspace  # the workspace the agent was running in
       run.log    # a log file of the run's progress
 ```
 
-## `terca.yaml` Configuration Reference
+## Configuration
 
-The `terca.yaml` file is the heart of Terca. It allows you to configure your test suite, define your tests, and specify the different configurations you want to run your tests against.
+### Top-Level Configuration (`terca.yaml`)
 
-### Top-Level Configuration
-
-| Key             | Type                | Description                                                                                             |
+| Field           | Type                | Description                                                                                             |
 | --------------- | ------------------- | ------------------------------------------------------------------------------------------------------- |
 | `name`          | `string`            | The name of your test suite.                                                                            |
 | `description`   | `string`            | (Optional) A description of your test suite.                                                            |
-| `workspaceDir`  | `string`            | (Optional) The directory to use as the workspace for all tests.                                         |
-| `repetitions`   | `number`            | (Optional) The number of times to run each test. Can be overridden by CLI flags.                                                 |
-| `concurrency`   | `number`            | (Optional) The number of tests to run in parallel. Can be overridden by CLI flags.                                                      |
-| `timeoutSeconds`| `number`            | (Optional) The number of seconds to wait for a test to complete before timing out.                      |
+| `repetitions`   | `number`            | (Optional) The number of times to run each eval. Can be overridden by CLI flags.                                                 |
+| `concurrency`   | `number`            | (Optional) The number of evals to run in parallel. Can be overridden by CLI flags.                                                      |
+| `timeoutSeconds`| `number`            | (Optional) The number of seconds to wait for an eval to complete before timing out.                      |
 | `preamble`      | `string`            | (Optional) Prefix all test prompts with this content.                                                           |
 | `postamble`     | `string`            | (Optional) Postfix all test prompts with this content.                                                            |
-| `before`        | `BeforeAction[]`    | (Optional) A list of actions to run before each test.                                                   |
-| `tests`         | `TercaTest[]`       | A list of tests to run.                                                                                 |
-| `environments`  | `Environment[]`     | (Optional) A list of environments to run the tests in.                                                  |
-| `experiments`   | `Experiment[]`      | (Optional) A list of experiments to run the tests in.                                                   |
+| `before`        | `BeforeAction[]`    | (Optional) A list of actions to run before all evals.                                                   |
+| `evals`         | `Eval[]`            | A list of evals to run.                                                                                 |
+| `environments`  | `Environment[]`     | (Optional) A list of environments to run the evals in.                                                  |
+| `experiments`   | `Experiment[]`      | (Optional) A list of experiments to run.                                                                |
 
 ### Environments and Experiments
 
@@ -73,7 +93,7 @@ An `experiment` defines a set of configurations that are related to the experime
 ```yaml
 environments:
   - name: default-agent
-    agent: gemini
+    agent: gemini-cli
     rules: default_rules.txt
 experiments:
   - name: no-extra-context
@@ -104,24 +124,28 @@ before:
         }
 ```
 
-### Tests
+### Eval Configuration (`Eval`)
 
-The `tests` section defines the individual tests to be run.
+| Field           | Type                | Description                                                                                             |
+| --------------- | ------------------- | ------------------------------------------------------------------------------------------------------- |
+| `name`          | `string`            | The name of the eval.                                                                                   |
+| `description`   | `string`            | (Optional) A description of the eval.                                                                   |
+| `prompt`        | `string`            | The prompt to give to the agent.                                                                        |
+| `repetitions`   | `number`            | (Optional) The number of times to run this eval.                                                        |
+| `timeoutSeconds`| `number`            | (Optional) The number of seconds to wait for this eval to complete before timing out.                   |
+| `before`        | `BeforeAction[]`    | (Optional) A list of actions to run before this eval.                                                   |
+| `tests`         | `Test[]`            | (Optional) A list of tests to run to verify the agent's work.                                           |
 
-| Key             | Type                | Description                                                                                             |
+### Test Configuration (`Test`)
+
+The `tests` section allows you to define a list of tests to run after each eval. The following tests are available:
+
+| Field           | Type                | Description                                                                                             |
 | --------------- | ------------------- | ------------------------------------------------------------------------------------------------------- |
 | `name`          | `string`            | The name of the test.                                                                                   |
-| `description`   | `string`            | (Optional) A description of the test.                                                                   |
-| `prompt`        | `string`            | The prompt to give to the agent.                                                                        |
-| `workspaceDir`  | `string`            | (Optional) The directory to use as the workspace for this test.                                         |
-| `repetitions`   | `number`            | (Optional) The number of times to run this test.                                                        |
-| `timeoutSeconds`| `number`            | (Optional) The number of seconds to wait for this test to complete before timing out.                   |
-| `before`        | `BeforeAction[]`    | (Optional) A list of actions to run before this test.                                                   |
-| `eval`          | `TercaEvaluator[]`  | (Optional) A list of evaluators to run after this test.                                                 |
-
-### Evaluators
-
-The `eval` section allows you to define a list of evaluators to run after each test. The following evaluators are available:
+| `commandSuccess`| `string \| object`  | (Optional) A command to run. If it exits with 0, the test passes. Can also specify `outputContains`.    |
+| `fileExists`    | `string \| string[]`| (Optional) A file or list of files that must exist for the test to pass.                                |
+The `tests` section allows you to define a list of tests to run after each eval. The following tests are available:
 
 - `commandSuccess`: Check if a command runs successfully. The value can be a string with the command to run, or an object with a `command` and an `outputContains` string.
 - `fileExists`: Check if a file or list of files exists.
@@ -129,7 +153,7 @@ The `eval` section allows you to define a list of evaluators to run after each t
 **Example:**
 
 ```yaml
-eval:
+tests:
   - name: check_output_file
     fileExists: output.txt
   - name: verify_script_runs

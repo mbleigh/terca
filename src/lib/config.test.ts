@@ -70,6 +70,27 @@ describe("expandEnvironmentsAndExperiments", () => {
       ],
     },
     {
+      desc: "should return variants for each environment and experiment with evals",
+      input: {
+        name: "test",
+        evals: [],
+        environments: [
+          { name: "env1", agent: "agent1" },
+          { name: "env2", agent: "agent2" },
+        ],
+        experiments: [
+          { name: "exp1", command: "cmd1" },
+          { name: "exp2", command: "cmd2" },
+        ],
+      },
+      expect: [
+        { name: "exp1", environment: "env1", experiment: "exp1", agent: "agent1", command: "cmd1" },
+        { name: "exp2", environment: "env1", experiment: "exp2", agent: "agent1", command: "cmd2" },
+        { name: "exp1", environment: "env2", experiment: "exp1", agent: "agent2", command: "cmd1" },
+        { name: "exp2", environment: "env2", experiment: "exp2", agent: "agent2", command: "cmd2" },
+      ],
+    },
+    {
       desc: "should merge properties, with experiment overriding environment",
       input: {
         name: "test",

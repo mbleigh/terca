@@ -15,9 +15,9 @@
  */
 
 import {
-  TercaEvaluatorActions,
-  TercaEvaluatorActionType,
-  TercaTest,
+  TercaTestActions,
+  TercaTestActionType,
+  TercaEval,
 } from "./types.js";
 import { spawn } from "child_process";
 import fs from "fs/promises";
@@ -25,7 +25,7 @@ import path from "path";
 
 export interface EvalActionContext {
   workspaceDir: string;
-  test: TercaTest;
+  test: TercaEval;
   logStream: NodeJS.WritableStream;
 }
 
@@ -34,9 +34,9 @@ export interface EvalActionResult {
   message?: string;
 }
 
-export type EvalAction<T extends TercaEvaluatorActionType> = (
+export type EvalAction<T extends TercaTestActionType> = (
   ctx: EvalActionContext,
-  payload: NonNullable<TercaEvaluatorActions[T]>,
+  payload: NonNullable<TercaTestActions[T]>,
 ) => Promise<EvalActionResult>;
 
 export const commandSuccess: EvalAction<"commandSuccess"> = async (

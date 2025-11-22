@@ -21,7 +21,7 @@ import {
   Config,
   RunDisplayState,
   TercaBeforeAction,
-  TercaTest,
+  TercaEval,
 } from "./types.js";
 
 interface BeforeActionContext {
@@ -88,15 +88,14 @@ const HANDLERS: Record<
 export async function runBeforeActions(
   workspaceDir: string,
   config: Config,
-  test: TercaTest,
+  evalItem: TercaEval,
   variant: Record<string, any>,
   logStream: NodeJS.WritableStream,
   runState: RunDisplayState,
 ) {
   const actions = [
     ...(config.before || []),
-    ...(variant.before || []),
-    ...(test.before || []),
+    ...(evalItem.before || []),
   ];
   const ctx: BeforeActionContext = { workspaceDir, logStream, runState };
 

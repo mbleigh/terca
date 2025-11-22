@@ -78,7 +78,7 @@ export const ExperimentSchema = z.object({
 export type Experiment = z.infer<typeof ExperimentSchema>;
 
 
-export const TercaEvaluatorActionsSchema = z.object({
+export const TercaTestActionsSchema = z.object({
   commandSuccess: z
     .union([
       z.string(),
@@ -90,45 +90,51 @@ export const TercaEvaluatorActionsSchema = z.object({
     .optional(),
   fileExists: z.union([z.string(), z.array(z.string())]).optional(),
 });
-export type TercaEvaluatorActions = z.infer<typeof TercaEvaluatorActionsSchema>;
-export type TercaEvaluatorActionType = keyof TercaEvaluatorActions;
+export type TercaTestActions = z.infer<typeof TercaTestActionsSchema>;
+export type TercaTestActionType = keyof TercaTestActions;
 
-export interface TercaEvaluatorResult {
+export interface TercaTestResult {
   /** Score between 0.0 and 1.0 */
   score: number;
   /** Optional message to go along with the score */
   message?: string;
 }
 
-export const TercaEvaluatorSchema = TercaEvaluatorActionsSchema.extend({
+export const TercaTestSchema = TercaTestActionsSchema.extend({
   name: z.string(),
 });
-export type TercaEvaluator = z.infer<typeof TercaEvaluatorSchema>;
+export type TercaTest = z.infer<typeof TercaTestSchema>;
 
-export const TercaTestSchema = z.object({
+export const TercaEvalSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   prompt: z.string(),
-  workspaceDir: z.string().optional(),
   repetitions: z.number().optional(),
   timeoutSeconds: z.number().optional(),
   before: z.array(TercaBeforeActionSchema).optional(),
-  eval: z.array(TercaEvaluatorSchema).optional(),
+  tests: z.array(TercaTestSchema).optional(),
+  dir: z.string().optional(),
 });
 
-export type TercaTest = z.infer<typeof TercaTestSchema>;
+export type TercaEval = z.infer<typeof TercaEvalSchema>;
+
+export const TercaEvalConfigSchema = TercaEvalSchema.omit({
+  name: true, // name is optional in eval.terca.yaml, defaults to dir name
+}).extend({
+  name: z.string().optional(),
+});
+export type TercaEvalConfig = z.infer<typeof TercaEvalConfigSchema>;
 
 export const TercaConfigSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   preamble: z.string().optional(),
   postamble: z.string().optional(),
-  workspaceDir: z.string().optional(),
   repetitions: z.number().optional(),
   concurrency: z.number().optional(),
   timeoutSeconds: z.number().optional(),
   before: z.array(TercaBeforeActionSchema).optional(),
-  tests: z.array(TercaTestSchema),
+  evals: z.array(TercaEvalSchema).default([]),
   environments: z.array(EnvironmentSchema).optional(),
   experiments: z.array(ExperimentSchema).optional(),
 });

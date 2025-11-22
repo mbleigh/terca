@@ -13,16 +13,7 @@
 # limitations under the License.
 
 name: basic-js
-workspaceDir: app
 before:
   - command: npm i
 matrix:
   - agent: gemini
-tests:
-  - name: fib
-    prompt: create a fibonacci sequence function in fib.ts
-    eval:
-      - name: made_file
-        fileExists: fib.ts
-      - name: compiles
-        commandSuccess: npx tsc --noEmit

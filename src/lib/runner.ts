@@ -15,58 +15,79 @@
  */
 
 import { expandEnvironmentsAndExperiments, loadConfig } from "./config.js";
-import { GeminiAgentRunner } from "./runners/gemini.js";
-import { ClaudeAgentRunner } from "./runners/claude.js";
+import { GeminiAgentRunner } from "./runners/gemini-cli.js";
+import { ClaudeAgentRunner } from "./runners/claude-code.js";
 import { CodexAgentRunner } from "./runners/codex.js";
 import { OpencodeAgentRunner } from "./runners/opencode.js";
 import {
   AgentRunner,
   AgentRunnerStats,
+  AgentRunnerProgress,
   Config,
-  ExpandedMatrix,
+  TercaEval,
   TercaTest,
-  RunDisplayState,
+  TercaTestResult,
 } from "./types.js";
-import { runBeforeActions } from "./before-actions.js";
-import path from "path";
-import os from "os";
-import fs from "fs/promises";
-import { createWriteStream } from "fs";
+import * as fs from "fs/promises";
+import * as path from "path";
+import * as yaml from "yaml";
 import { spawn } from "child_process";
-import { printHeader, printResults } from "./ui.js";
-import * as evalActions from "./eval-actions.js";
+import { createWriteStream } from "fs";
 import logUpdate from "log-update";
 import { green, red, gray } from "./colors.js";
+import * as evalActions from "./eval-actions.js";
+import { runBeforeActions } from "./before-actions.js";
+import os from "os";
 
 const AGENT_RUNNERS: Record<string, new () => AgentRunner> = {
-  gemini: GeminiAgentRunner,
-  claude: ClaudeAgentRunner,
-  codex: CodexAgentRunner,
-  opencode: OpencodeAgentRunner,
+  "gemini-cli": GeminiAgentRunner,
+  "claude-code": ClaudeAgentRunner,
+  "codex": CodexAgentRunner,
+  "opencode": OpencodeAgentRunner,
 };
 
+export interface RunDisplayState {
+  id: number;
+  name: string;
+  status: "pending" | "running" | "complete" | "error";
+  message: string;
+  logFile?: string;
+  results?: Record<string, TercaTestResult>;
+  stats?: AgentRunnerStats;
+  error?: Error;
+}
+
 export async function runTests(options: {
+  test?: string[];
+  environment?: string[];
+  experiment?: string[];
   repetitions?: number;
   concurrency?: number;
   signal?: AbortSignal;
-  test?: string[];
-  experiment?: string[];
-  environment?: string[];
 }) {
   const config = await loadConfig();
-  const variants = expandEnvironmentsAndExperiments(config);
   const runDir = await createRunDir();
-  const concurrency = options.concurrency || config.concurrency || 3;
+  const concurrency =
+    options.concurrency || config.concurrency || os.cpus().length;
 
-  printHeader(`Terca Run: ${runDir}`);
+  console.log(`Starting run in ${runDir}`);
+  console.log(`Concurrency: ${concurrency}`);
 
-  const allTestRuns = [];
+  const variants = expandEnvironmentsAndExperiments(config);
+  const allTestRuns: {
+    id: number;
+    eval: TercaEval;
+    variant: Record<string, any>;
+    repetition: number;
+    name: string;
+  }[] = [];
+
   let runId = 0;
   const suiteRepetitions = options.repetitions || config.repetitions || 1;
 
-  const testsToRun = options.test
-    ? config.tests.filter((test) => options.test?.includes(test.name))
-    : config.tests;
+  const evalsToRun = options.test
+    ? config.evals.filter((e) => options.test?.includes(e.name))
+    : config.evals;
 
   let variantsToRun = variants;
   if (options.experiment) {
@@ -80,19 +101,19 @@ export async function runTests(options: {
     );
   }
 
-  for (const test of testsToRun) {
-    const testRepetitions = test.repetitions || 1;
-    const totalRepetitions = suiteRepetitions * testRepetitions;
+  for (const evalItem of evalsToRun) {
+    const evalRepetitions = evalItem.repetitions || 1;
+    const totalRepetitions = suiteRepetitions * evalRepetitions;
     for (const variant of variantsToRun) {
       for (let i = 0; i < totalRepetitions; i++) {
         runId++;
         const repetition = i + 1;
         allTestRuns.push({
           id: runId,
-          test,
+          eval: evalItem,
           variant,
           repetition,
-          name: `${test.name} (${variant.environment}.${
+          name: `${evalItem.name} (${variant.environment}.${
             variant.experiment
           } rep ${repetition})`,
         });
@@ -115,10 +136,10 @@ export async function runTests(options: {
       let line = `${state.id.toString().padStart(3, "0")} ${state.name}: `;
       if (state.status === "complete") {
         const evalResults = state.results || {};
-        const failedEvals = Object.entries(evalResults).filter(
+        const failedTests = Object.entries(evalResults).filter(
           ([, result]) => ((result as any).score as number) <= 0,
         );
-        const passed = failedEvals.length === 0;
+        const passed = failedTests.length === 0;
 
         if (passed) {
           line += green("✅ PASS");
@@ -143,7 +164,7 @@ export async function runTests(options: {
         line += "\n";
 
         if (!passed) {
-          for (const [name] of failedEvals) {
+          for (const [name] of failedTests) {
             line += `  - ${red("FAIL")}: ${name}\n`;
           }
         }
@@ -179,10 +200,10 @@ export async function runTests(options: {
       const runState = runStates.find((s) => s.id === run.id)!;
 
       try {
-        const { evalResult, stats } = await runTest(
+        const { evalResult, stats } = await runEval(
           runDir,
           config,
-          run.test,
+          run.eval,
           run.variant,
           run.id,
           run.repetition,
@@ -197,7 +218,7 @@ export async function runTests(options: {
 
         results.runs.push({
           id: run.id,
-          test: run.test.name,
+          eval: run.eval.name,
           environment: run.variant.environment,
           experiment: run.variant.experiment,
           repetition: run.repetition,
@@ -211,7 +232,7 @@ export async function runTests(options: {
         runState.error = e;
         results.runs.push({
           id: run.id,
-          test: run.test.name,
+          eval: run.eval.name,
           environment: run.variant.environment,
           experiment: run.variant.experiment,
           repetition: run.repetition,
@@ -243,31 +264,31 @@ export async function runTests(options: {
     `\n=== Terca Run Complete: ${runDir} ===\nSee ${resultsFile} for full results.\n`,
   );
 
-  printResults(results);
+  // printResults(results); // This line was removed based on the diff
 }
 
-async function runTest(
+async function runEval(
   runDir: string,
   config: Config,
-  test: TercaTest,
+  evalItem: TercaEval,
   variant: Record<string, any>,
   runId: number,
   repetition: number,
   runState: RunDisplayState,
   signal?: AbortSignal,
 ) {
-  const testRunDir = await setupTestRunDir(runDir, test, variant, repetition);
-  runState.logFile = path.join(testRunDir, "run.log");
+  const evalRunDir = await setupEvalRunDir(runDir, evalItem, variant, repetition);
+  runState.logFile = path.join(evalRunDir, "run.log");
   const logStream = createWriteStream(runState.logFile);
-  const artifactsDir = path.join(testRunDir, "artifacts");
+  const artifactsDir = path.join(evalRunDir, "artifacts");
   await fs.mkdir(artifactsDir, { recursive: true });
 
   try {
-    const workspaceDir = await setupWorkspace(testRunDir, config, test);
+    const workspaceDir = await setupWorkspace(evalRunDir, config, evalItem);
     await runBeforeActions(
       workspaceDir,
       config,
-      test,
+      evalItem,
       variant,
       logStream,
       runState,
@@ -277,13 +298,13 @@ async function runTest(
       workspaceDir,
       artifactsDir,
       config,
-      test,
+      evalItem,
       variant,
       logStream,
       runState,
       signal,
     );
-    const evalResult = await evaluate(workspaceDir, test, logStream, runState);
+    const evalResult = await verifyEval(workspaceDir, evalItem, logStream, runState);
     return { evalResult, stats };
   } finally {
     logStream.close();
@@ -316,36 +337,63 @@ async function createRunDir(): Promise<string> {
   }
 }
 
-async function setupTestRunDir(
+async function setupEvalRunDir(
   runDir: string,
-  test: TercaTest,
+  evalItem: TercaEval,
   variant: Record<string, any>,
   repetition: number,
 ): Promise<string> {
   const repetitionStr = repetition.toString().padStart(2, "0");
-  const testRunDir = path.join(
+  const evalRunDir = path.join(
     runDir,
-    test.name,
+    evalItem.name,
     `${variant.environment}.${variant.experiment}.${repetitionStr}`,
   );
 
-  await fs.mkdir(testRunDir, { recursive: true });
+  await fs.mkdir(evalRunDir, { recursive: true });
 
-  return testRunDir;
+  return evalRunDir;
 }
 
-async function setupWorkspace(
-  testRunDir: string,
+export async function setupWorkspace(
+  evalRunDir: string,
   config: Config,
-  test: TercaTest,
+  evalItem: TercaEval,
+  projectRoot: string = process.cwd(),
 ): Promise<string> {
-  const workspaceDir = path.join(testRunDir, "workspace");
-  const sourceDir = test.workspaceDir || config.workspaceDir;
-  if (!sourceDir) {
-    await fs.mkdir(workspaceDir, { recursive: true });
-    return workspaceDir;
+  const workspaceDir = path.join(evalRunDir, "workspace");
+  await fs.mkdir(workspaceDir, { recursive: true });
+
+  let usedBase = false;
+
+  // 1. Project-level _base
+  // We assume process.cwd() is the project root for now, or we could pass it in config
+  // Ideally config should have a 'root' property but it doesn't yet.
+  // We'll assume the config loading set the context.
+  // For now, let's check process.cwd()/_base
+  const projectBase = path.join(projectRoot, "_base");
+  try {
+    await fs.cp(projectBase, workspaceDir, { recursive: true });
+    usedBase = true;
+  } catch (e: any) {
+    if (e.code !== "ENOENT") {
+      throw e;
+    }
   }
-  await fs.cp(sourceDir, workspaceDir, { recursive: true });
+
+  // 2. Eval-level _base
+  if (evalItem.dir) {
+    const evalBase = path.join(evalItem.dir, "_base");
+    try {
+      await fs.cp(evalBase, workspaceDir, { recursive: true, force: true });
+      usedBase = true;
+    } catch (e: any) {
+      if (e.code !== "ENOENT") {
+        throw e;
+      }
+    }
+  }
+
   return workspaceDir;
 }
 
@@ -383,7 +431,7 @@ async function runAgent(
   workspaceDir: string,
   artifactsDir: string,
   config: Config,
-  test: TercaTest,
+  evalItem: TercaEval,
   variant: Record<string, any>,
   logStream: NodeJS.WritableStream,
   runState: RunDisplayState,
@@ -401,7 +449,7 @@ async function runAgent(
   const prompt = [
     config.preamble,
     variant.preamble,
-    test.prompt,
+    evalItem.prompt,
     variant.postamble,
     config.postamble,
   ]
@@ -420,7 +468,7 @@ async function runAgent(
     }
   }
 
-  const timeoutSeconds = test.timeoutSeconds || config.timeoutSeconds || 300;
+  const timeoutSeconds = evalItem.timeoutSeconds || config.timeoutSeconds || 300;
   let timedOut = false;
 
   const timeout = setTimeout(() => {
@@ -464,32 +512,31 @@ async function runAgent(
   return stats;
 }
 
-async function evaluate(
+async function verifyEval(
   workspaceDir: string,
-  test: TercaTest,
+  evalItem: TercaEval,
   logStream: NodeJS.WritableStream,
   runState: RunDisplayState,
 ) {
   const results: any = {};
   const evalCtx: evalActions.EvalActionContext = {
     workspaceDir,
-    test,
+    test: evalItem, // TODO: Rename test to eval in EvalActionContext too?
     logStream,
   };
 
-  for (const [i, evalStep] of (test.eval || []).entries()) {
-    runState.message = `evaluating: ${evalStep.name} (${i + 1}/${
-      test.eval?.length
+  for (const [i, test] of (evalItem.tests || []).entries()) {
+    runState.message = `evaluating: ${test.name} (${i + 1}/${evalItem.tests?.length
     })`;
-    if (evalStep.commandSuccess) {
+    if (test.commandSuccess) {
       const result = await evalActions.commandSuccess(
         evalCtx,
-        evalStep.commandSuccess,
+        test.commandSuccess,
       );
-      results[evalStep.name] = result;
-    } else if (evalStep.fileExists) {
-      const result = await evalActions.fileExists(evalCtx, evalStep.fileExists);
-      results[evalStep.name] = result;
+      results[test.name] = result;
+    } else if (test.fileExists) {
+      const result = await evalActions.fileExists(evalCtx, test.fileExists);
+      results[test.name] = result;
     }
   }
   return results;

@@ -1,0 +1,7 @@
+name: fib
+prompt: "Write a fibonacci function in fib.js that exports a function named fib"
+tests:
+  - name: check-file
+    fileExists: "fib.js"
+  - name: check-function
+    commandSuccess: "node -e 'const {fib} = require(\"./fib.js\"); if(fib(10) !== 55) process.exit(1)'"
